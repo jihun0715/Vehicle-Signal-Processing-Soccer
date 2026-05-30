@@ -96,13 +96,12 @@ chmod +x docker.sh
 - image name: `vspsoccer-image:latest`
 - GPU: `--gpus "device=0"`
 - CUDA device: `CUDA_VISIBLE_DEVICES=0`
-- ISSIA dataset root: `ISSIA_SOCCER_ROOT=/datasets/ISSIA-Soccer`
+- ISSIA dataset root: `ISSIA_SOCCER_ROOT=/ssd/ISSIA-Soccer`
 - network: host network
 - IPC: host IPC for PyTorch dataloader/shared memory
 - device access: `/dev`
 - display forwarding: `/tmp/.X11-unix`, `DISPLAY`
 - workspace mount: `/home/jihun/Documents/VSP_Soccer_ws` -> `/workspace/VSP_Soccer_ws`
-- ISSIA dataset mount: `/home/jihun/Documents/ISSIA-Soccer` -> `/datasets/ISSIA-Soccer`
 - SSD mount: `/media/jihun/Crucial X10` -> `/ssd`
 
 ## Inside The Container

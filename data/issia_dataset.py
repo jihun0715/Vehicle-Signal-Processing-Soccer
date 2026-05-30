@@ -428,6 +428,238 @@ class ISSIASoccerSyncDataset(Dataset):
         return sorted(selected)
 
 
+class ISSIASoccerOffsetSyncDataset(Dataset):
+    """Multi-camera ISSIA view with fixed per-camera temporal offsets.
+
+    For each base frame ``t``, camera ``c`` reads ``t + frame_offsets[c]``.
+    The ground-truth offsets are returned in ``sample["time_offset_gt"]`` so
+    temporal calibration results can be evaluated later.
+    """
+
+    def __init__(
+        self,
+        root: PathLikeStr = DEFAULT_ISSIA_ROOT,
+        cameras: Sequence[int] = (1, 2),
+        *,
+        frame_offsets: Optional[Dict[int, int]] = None,
+        max_frame_offset: int = 0,
+        random_seed: Optional[int] = None,
+        reference_camera: Optional[int] = None,
+        force_reference_zero: bool = True,
+        allow_zero_non_reference: bool = False,
+        require_all_cameras: bool = True,
+        frame_step: int = 1,
+        start_frame: Optional[int] = None,
+        end_frame: Optional[int] = None,
+        **frame_dataset_kwargs: Any,
+    ) -> None:
+        if frame_step < 1:
+            raise ValueError("frame_step must be >= 1")
+        if max_frame_offset < 0:
+            raise ValueError("max_frame_offset must be >= 0")
+
+        self.root = Path(root)
+        self.cameras = tuple(int(camera_id) for camera_id in cameras)
+        if not self.cameras:
+            raise ValueError("At least one camera is required")
+
+        self.reference_camera = int(reference_camera or self.cameras[0])
+        if self.reference_camera not in self.cameras:
+            raise ValueError("reference_camera must be one of cameras")
+
+        self.require_all_cameras = require_all_cameras
+        self.frame_step = frame_step
+        self.start_frame = start_frame
+        self.end_frame = end_frame
+        self.frame_offsets = self._resolve_frame_offsets(
+            frame_offsets=frame_offsets,
+            max_frame_offset=max_frame_offset,
+            random_seed=random_seed,
+            force_reference_zero=force_reference_zero,
+            allow_zero_non_reference=allow_zero_non_reference,
+        )
+
+        frame_dataset_kwargs = dict(frame_dataset_kwargs)
+        frame_dataset_kwargs["frame_step"] = 1
+        frame_dataset_kwargs["start_frame"] = None
+        frame_dataset_kwargs["end_frame"] = None
+        self.frame_dataset = ISSIASoccerFrameDataset(self.root, self.cameras, **frame_dataset_kwargs)
+        self._index_by_camera_frame = {
+            (record.camera_id, record.frame_index): idx
+            for idx, record in enumerate(self.frame_dataset.records)
+        }
+        self._frames_by_camera = {
+            camera_id: {
+                record.frame_index
+                for record in self.frame_dataset.records
+                if record.camera_id == camera_id
+            }
+            for camera_id in self.cameras
+        }
+        self._video_infos = {
+            camera_id: _read_video_info(_find_camera_file(self.root / "Sequences", camera_id, ".avi"))
+            for camera_id in self.cameras
+        }
+        self.frame_indices = self._build_base_frame_indices()
+
+    def __len__(self) -> int:
+        return len(self.frame_indices)
+
+    def __getitem__(self, index: int) -> Dict[str, Any]:
+        base_frame_index = self.frame_indices[index]
+        camera_samples = {}
+        timestamps = []
+
+        for camera_id in self.cameras:
+            observed_frame_index = base_frame_index + self.frame_offsets[camera_id]
+            sample_index = self._index_by_camera_frame.get((camera_id, observed_frame_index))
+            if sample_index is None:
+                if self.require_all_cameras:
+                    raise KeyError(
+                        f"Missing camera {camera_id} observed frame {observed_frame_index} "
+                        f"for base frame {base_frame_index}"
+                    )
+                continue
+
+            sample = self.frame_dataset[sample_index]
+            sample = self._with_offset_meta(sample, base_frame_index, observed_frame_index)
+            camera_samples[camera_id] = sample
+            timestamps.append(sample["meta"]["timestamp_sec"])
+
+        reference_fps = self._video_infos[self.reference_camera]["fps"]
+        timestamp_sec = base_frame_index / reference_fps if reference_fps > 0 else 0.0
+
+        return {
+            "frame_index": base_frame_index,
+            "base_frame_index": base_frame_index,
+            "timestamp_sec": timestamp_sec,
+            "cameras": camera_samples,
+            "time_offset_gt": self._build_time_offset_gt(),
+            "observed_frame_indices": {
+                camera_id: base_frame_index + self.frame_offsets[camera_id]
+                for camera_id in self.cameras
+            },
+            "observed_timestamp_sec": timestamps,
+        }
+
+    def close(self) -> None:
+        self.frame_dataset.close()
+
+    def _resolve_frame_offsets(
+        self,
+        *,
+        frame_offsets: Optional[Dict[int, int]],
+        max_frame_offset: int,
+        random_seed: Optional[int],
+        force_reference_zero: bool,
+        allow_zero_non_reference: bool,
+    ) -> Dict[int, int]:
+        if frame_offsets is not None:
+            return {camera_id: int(frame_offsets.get(camera_id, 0)) for camera_id in self.cameras}
+
+        rng = np.random.default_rng(random_seed)
+        offsets = {}
+        for camera_id in self.cameras:
+            if force_reference_zero and camera_id == self.reference_camera:
+                offsets[camera_id] = 0
+                continue
+
+            if max_frame_offset == 0:
+                offsets[camera_id] = 0
+                continue
+
+            if allow_zero_non_reference:
+                offset = int(rng.integers(-max_frame_offset, max_frame_offset + 1))
+            else:
+                choices = [value for value in range(-max_frame_offset, max_frame_offset + 1) if value != 0]
+                offset = int(rng.choice(choices))
+            offsets[camera_id] = offset
+        return offsets
+
+    def _build_base_frame_indices(self) -> List[int]:
+        base_frame_sets = []
+        for camera_id in self.cameras:
+            offset = self.frame_offsets[camera_id]
+            frames = {frame_index - offset for frame_index in self._frames_by_camera[camera_id]}
+            base_frame_sets.append(frames)
+
+        if not base_frame_sets:
+            return []
+        if self.require_all_cameras:
+            base_frames = set.intersection(*base_frame_sets)
+        else:
+            base_frames = set.union(*base_frame_sets)
+
+        selected = []
+        start = self.start_frame if self.start_frame is not None else min(base_frames, default=0)
+        for frame_index in sorted(base_frames):
+            if self.start_frame is not None and frame_index < self.start_frame:
+                continue
+            if self.end_frame is not None and frame_index > self.end_frame:
+                continue
+            if (frame_index - start) % self.frame_step != 0:
+                continue
+            selected.append(frame_index)
+        return selected
+
+    def _with_offset_meta(
+        self,
+        sample: Dict[str, Any],
+        base_frame_index: int,
+        observed_frame_index: int,
+    ) -> Dict[str, Any]:
+        sample = dict(sample)
+        meta = dict(sample["meta"])
+        camera_id = int(meta["camera_id"])
+        offset = self.frame_offsets[camera_id]
+        meta.update(
+            {
+                "base_frame_index": base_frame_index,
+                "observed_frame_index": observed_frame_index,
+                "applied_frame_offset": offset,
+                "reference_camera": self.reference_camera,
+            }
+        )
+        sample["meta"] = meta
+
+        target = dict(sample["target"])
+        target["base_frame_index"] = base_frame_index
+        target["observed_frame_index"] = observed_frame_index
+        target["applied_frame_offset"] = offset
+        sample["target"] = target
+        return sample
+
+    def _build_time_offset_gt(self) -> Dict[str, Any]:
+        reference_offset = self.frame_offsets[self.reference_camera]
+        applied_time_offsets_sec = {}
+        relative_time_offsets_sec = {}
+        correction_time_offsets_sec = {}
+        relative_frame_offsets = {}
+        correction_frame_offsets = {}
+
+        for camera_id in self.cameras:
+            fps = self._video_infos[camera_id]["fps"]
+            offset = self.frame_offsets[camera_id]
+            relative = offset - reference_offset
+            correction = reference_offset - offset
+            relative_frame_offsets[camera_id] = relative
+            correction_frame_offsets[camera_id] = correction
+            applied_time_offsets_sec[camera_id] = offset / fps if fps > 0 else 0.0
+            relative_time_offsets_sec[camera_id] = relative / fps if fps > 0 else 0.0
+            correction_time_offsets_sec[camera_id] = correction / fps if fps > 0 else 0.0
+
+        return {
+            "reference_camera": self.reference_camera,
+            "applied_frame_offsets": dict(self.frame_offsets),
+            "relative_frame_offsets": relative_frame_offsets,
+            "correction_frame_offsets": correction_frame_offsets,
+            "applied_time_offsets_sec": applied_time_offsets_sec,
+            "relative_time_offsets_sec": relative_time_offsets_sec,
+            "correction_time_offsets_sec": correction_time_offsets_sec,
+            "definition": "observed_frame = base_frame + applied_frame_offsets[camera_id]",
+        }
+
+
 def collate_issia_samples(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Collate ISSIA samples without stacking variable-length targets."""
 
@@ -442,8 +674,10 @@ def collate_issia_samples(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
             camera_batches[camera_id] = collate_issia_samples(samples)
         return {
             "frame_indices": [item["frame_index"] for item in batch],
+            "base_frame_indices": [item.get("base_frame_index", item["frame_index"]) for item in batch],
             "timestamp_sec": [item["timestamp_sec"] for item in batch],
             "camera_batches": camera_batches,
+            "time_offset_gt": [item.get("time_offset_gt") for item in batch],
             "samples": batch,
         }
 
@@ -460,6 +694,7 @@ def create_issia_dataloader(
     cameras: Sequence[int] = (1, 2, 3, 4, 5, 6),
     *,
     synchronized: bool = False,
+    offset_synchronized: bool = False,
     batch_size: int = 1,
     shuffle: bool = False,
     num_workers: int = 0,
@@ -471,7 +706,9 @@ def create_issia_dataloader(
     if DataLoader is None:
         raise ImportError("PyTorch is required to create a DataLoader")
 
-    if synchronized:
+    if offset_synchronized:
+        dataset = ISSIASoccerOffsetSyncDataset(root, cameras, **dataset_kwargs)
+    elif synchronized:
         dataset = ISSIASoccerSyncDataset(root, cameras, **dataset_kwargs)
     else:
         dataset = ISSIASoccerFrameDataset(root, cameras, **dataset_kwargs)
