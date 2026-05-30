@@ -1,49 +1,89 @@
 """Create a quick top/bottom video for temporally shifted camera streams.
 
 Example:
-    python debug_video.py --cameras 1 2 --max-offset 80 --seed 7 --num-frames 150
+    python debug_video.py
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, Sequence, Tuple
 
 import cv2
 import numpy as np
 
-from config import DEBUG_OUTPUT_DIR, ISSIA_SOCCER_ROOT
-from data import BALL_LABEL, ISSIASoccerOffsetSyncDataset
+from config import (
+    DEBUG_OUTPUT_DIR,
+    DEBUG_VIDEO_BATCH_SIZE,
+    DEBUG_VIDEO_CAMERAS,
+    DEBUG_VIDEO_FPS,
+    DEBUG_VIDEO_FRAME_STEP,
+    DEBUG_VIDEO_NUM_FRAMES,
+    DEBUG_VIDEO_NUM_WORKERS,
+    DEBUG_VIDEO_SHOW_BOXES,
+    DEBUG_VIDEO_START_FRAME,
+    DEBUG_VIDEO_WIDTH,
+    ISSIA_SOCCER_ROOT,
+    OFFSET_ALLOW_ZERO_NON_REFERENCE,
+    OFFSET_FORCE_REFERENCE_ZERO,
+    OFFSET_MAX_FRAME_OFFSET,
+    OFFSET_RANDOM_SEED,
+    OFFSET_REFERENCE_CAMERA,
+)
+from data import BALL_LABEL, create_issia_offset_dataloader
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render temporally shifted ISSIA camera pair.")
-    parser.add_argument("--root", type=Path, default=ISSIA_SOCCER_ROOT, help="ISSIA-Soccer root path.")
-    parser.add_argument("--cameras", type=int, nargs=2, default=[1, 2], help="Two camera IDs, shown top/bottom.")
-    parser.add_argument("--start-frame", type=int, default=500, help="Base frame to start from.")
-    parser.add_argument("--num-frames", type=int, default=120, help="Number of rendered frames.")
-    parser.add_argument("--frame-step", type=int, default=1, help="Step in base-frame time.")
-    parser.add_argument("--max-offset", type=int, default=60, help="Random max absolute frame offset.")
-    parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducible offsets.")
-    parser.add_argument("--width", type=int, default=960, help="Output width for each camera panel.")
-    parser.add_argument("--fps", type=float, default=25.0, help="Output video FPS.")
-    parser.add_argument("--show-boxes", action="store_true", help="Draw ISSIA annotation boxes.")
+    parser = argparse.ArgumentParser(
+        description="Render temporally shifted ISSIA camera pair. Defaults come from config.py."
+    )
     parser.add_argument("--show", action="store_true", help="Open an OpenCV preview window while writing.")
+    parser.add_argument("--show-boxes", action="store_true", default=None, help="Draw ISSIA annotation boxes.")
     parser.add_argument("--output", type=Path, default=None, help="Output mp4 path.")
     return parser.parse_args()
 
 
+def load_settings(cli_args: argparse.Namespace) -> SimpleNamespace:
+    return SimpleNamespace(
+        root=Path(ISSIA_SOCCER_ROOT),
+        cameras=tuple(DEBUG_VIDEO_CAMERAS),
+        start_frame=DEBUG_VIDEO_START_FRAME,
+        num_frames=DEBUG_VIDEO_NUM_FRAMES,
+        frame_step=DEBUG_VIDEO_FRAME_STEP,
+        max_offset=OFFSET_MAX_FRAME_OFFSET,
+        seed=OFFSET_RANDOM_SEED,
+        reference_camera=OFFSET_REFERENCE_CAMERA,
+        force_reference_zero=OFFSET_FORCE_REFERENCE_ZERO,
+        allow_zero_non_reference=OFFSET_ALLOW_ZERO_NON_REFERENCE,
+        width=DEBUG_VIDEO_WIDTH,
+        fps=DEBUG_VIDEO_FPS,
+        batch_size=DEBUG_VIDEO_BATCH_SIZE,
+        num_workers=DEBUG_VIDEO_NUM_WORKERS,
+        show_boxes=DEBUG_VIDEO_SHOW_BOXES if cli_args.show_boxes is None else cli_args.show_boxes,
+        show=cli_args.show,
+        output=cli_args.output,
+    )
+
+
 def main() -> None:
-    args = parse_args()
-    root = args.root.expanduser()
-    if not root.exists():
-        raise FileNotFoundError(f"Dataset root does not exist: {root}")
+    args = load_settings(parse_args())
+    args.root = args.root.expanduser()
+    if not args.root.exists():
+        raise FileNotFoundError(f"Dataset root does not exist: {args.root}")
+    if args.show:
+        print(f"OpenCV window preview enabled. DISPLAY={os.environ.get('DISPLAY', '<unset>')}")
+    else:
+        print("OpenCV window preview disabled. Use --show to open a live window.")
 
     end_frame = args.start_frame + (args.num_frames - 1) * args.frame_step
-    dataset = ISSIASoccerOffsetSyncDataset(
-        root,
+    loader = create_issia_offset_dataloader(
+        args.root,
         cameras=tuple(args.cameras),
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
         include_empty=True,
         load_images=True,
         return_tensors=False,
@@ -53,10 +93,11 @@ def main() -> None:
         frame_step=args.frame_step,
         max_frame_offset=args.max_offset,
         random_seed=args.seed,
-        reference_camera=args.cameras[0],
-        force_reference_zero=True,
-        allow_zero_non_reference=False,
+        reference_camera=args.reference_camera,
+        force_reference_zero=args.force_reference_zero,
+        allow_zero_non_reference=args.allow_zero_non_reference,
     )
+    dataset = loader.dataset
 
     if len(dataset) == 0:
         raise RuntimeError("Offset dataset is empty. Try a later start-frame or smaller max-offset.")
@@ -64,6 +105,10 @@ def main() -> None:
     offset_gt = dataset[0]["time_offset_gt"]
     print("Offset GT:")
     print(offset_gt)
+    print(
+        f"Rendering {min(args.num_frames, len(dataset))} frames "
+        f"with batch_size={args.batch_size}, num_workers={args.num_workers}"
+    )
 
     output_path = args.output
     if output_path is None:
@@ -87,19 +132,32 @@ def main() -> None:
     )
     if not writer.isOpened():
         raise RuntimeError(f"Failed to open video writer: {output_path}")
+    print(f"Writing video to: {output_path}")
 
     try:
-        for idx in range(min(args.num_frames, len(dataset))):
-            sample = dataset[idx]
-            canvas = build_canvas(sample, args.cameras, args.width, args.show_boxes)
-            writer.write(canvas)
-            if args.show:
-                cv2.imshow("ISSIA temporal offset debug", canvas)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
+        written = 0
+        should_stop = False
+        for batch in loader:
+            for sample in batch["samples"]:
+                if written >= args.num_frames:
+                    should_stop = True
                     break
+                canvas = build_canvas(sample, args.cameras, args.width, args.show_boxes)
+                writer.write(canvas)
+                written += 1
+                if written == 1 or written % 50 == 0:
+                    print(f"Rendered {written} frames")
+                if args.show:
+                    cv2.imshow("ISSIA temporal offset debug", canvas)
+                    if cv2.waitKey(1) & 0xFF == ord("q"):
+                        should_stop = True
+                        break
+            if should_stop:
+                break
     finally:
         writer.release()
-        dataset.close()
+        if hasattr(dataset, "close"):
+            dataset.close()
         if args.show:
             cv2.destroyAllWindows()
 
@@ -108,7 +166,7 @@ def main() -> None:
 
 def build_canvas(
     sample: Dict[str, Any],
-    cameras: Tuple[int, int],
+    cameras: Sequence[int],
     output_width: int,
     show_boxes: bool,
 ) -> np.ndarray:

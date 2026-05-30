@@ -1,21 +1,30 @@
 """Quick checks for the ISSIA soccer dataloader.
 
-Examples:
+Example:
     python debug.py
-    python debug.py --root /home/jihun/Documents/ISSIA-Soccer
-    python debug.py --cameras 1 2 --frame-step 250 --save-preview
 """
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict
 
 import cv2
 import numpy as np
 
-from config import DEBUG_OUTPUT_DIR, ISSIA_CAMERAS, ISSIA_SOCCER_ROOT
+from config import (
+    DEBUG_CAMERAS,
+    DEBUG_FRAME_STEP,
+    DEBUG_OUTPUT_DIR,
+    DEBUG_SAVE_PREVIEW,
+    DATALOADER_BATCH_SIZE,
+    DATALOADER_NUM_WORKERS,
+    DATALOADER_PIN_MEMORY,
+    ISSIA_SOCCER_ROOT,
+    OFFSET_MAX_FRAME_OFFSET,
+    OFFSET_RANDOM_SEED,
+)
 from data import (
     BALL_LABEL,
     ISSIASoccerFrameDataset,
@@ -28,19 +37,30 @@ from data import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Debug ISSIA dataset/dataloader wiring.")
-    parser.add_argument("--root", type=Path, default=ISSIA_SOCCER_ROOT, help="ISSIA-Soccer root path.")
-    parser.add_argument("--cameras", type=int, nargs="+", default=list(ISSIA_CAMERAS), help="Camera IDs to inspect.")
-    parser.add_argument("--frame-step", type=int, default=500, help="Subsample frames for quick checks.")
-    parser.add_argument("--batch-size", type=int, default=2, help="Batch size for DataLoader check.")
-    parser.add_argument("--num-workers", type=int, default=0, help="DataLoader workers.")
-    parser.add_argument("--save-preview", action="store_true", help="Save one bbox overlay image.")
-    parser.add_argument("--output-dir", type=Path, default=DEBUG_OUTPUT_DIR, help="Preview output directory.")
+    parser = argparse.ArgumentParser(
+        description="Debug ISSIA dataset/dataloader wiring. Defaults come from config.py."
+    )
+    parser.add_argument("--save-preview", action="store_true", default=None, help="Save one bbox overlay image.")
     return parser.parse_args()
 
 
+def load_settings(cli_args: argparse.Namespace) -> SimpleNamespace:
+    return SimpleNamespace(
+        root=ISSIA_SOCCER_ROOT,
+        cameras=tuple(DEBUG_CAMERAS),
+        frame_step=DEBUG_FRAME_STEP,
+        batch_size=DATALOADER_BATCH_SIZE,
+        num_workers=DATALOADER_NUM_WORKERS,
+        pin_memory=DATALOADER_PIN_MEMORY,
+        save_preview=DEBUG_SAVE_PREVIEW if cli_args.save_preview is None else cli_args.save_preview,
+        output_dir=DEBUG_OUTPUT_DIR,
+        offset_max_frame_offset=OFFSET_MAX_FRAME_OFFSET,
+        offset_random_seed=OFFSET_RANDOM_SEED,
+    )
+
+
 def main() -> None:
-    args = parse_args()
+    args = load_settings(parse_args())
     root = args.root.expanduser()
     cameras = tuple(args.cameras)
 
@@ -137,6 +157,7 @@ def main() -> None:
             synchronized=False,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
+            pin_memory=args.pin_memory,
             frame_step=args.frame_step,
             load_images=False,
             return_tensors=False,
@@ -154,14 +175,15 @@ def main() -> None:
             cameras=cameras[: min(2, len(cameras))],
             batch_size=1,
             num_workers=args.num_workers,
+            pin_memory=args.pin_memory,
             frame_step=args.frame_step,
             load_images=False,
             return_tensors=False,
             include_empty=True,
             start_frame=500,
             end_frame=500 + args.frame_step,
-            max_frame_offset=30,
-            random_seed=3,
+            max_frame_offset=args.offset_max_frame_offset,
+            random_seed=args.offset_random_seed,
         )
         offset_batch = next(iter(offset_loader))
         print(f"Offset batch base frames: {offset_batch['base_frame_indices']}")
