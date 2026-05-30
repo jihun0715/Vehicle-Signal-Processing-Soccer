@@ -49,7 +49,7 @@ DEBUG_VIDEO_FPS = 25.0
 DEBUG_VIDEO_SHOW_BOXES = False
 
 # YOLO person detector defaults
-YOLO_MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", "yolo26x.pt")
+YOLO_MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", str(PROJECT_ROOT / "weights" / "yolo26x.pt"))
 YOLO_DEVICE = os.environ.get("YOLO_DEVICE", "0")
 YOLO_CONF_THRESHOLD = 0.25
 YOLO_IOU_THRESHOLD = 0.70
@@ -59,6 +59,12 @@ YOLO_VERBOSE = False
 # Projection defaults
 # Fill this with camera_id -> 3x3 image-to-world homography when calibration is ready.
 CAMERA_IMAGE_TO_WORLD_HOMOGRAPHIES = {}
+CAMERA_IMAGE_TO_WORLD_HOMOGRAPHIES_PATH = Path(
+    os.environ.get(
+        "CAMERA_IMAGE_TO_WORLD_HOMOGRAPHIES_PATH",
+        DEBUG_OUTPUT_DIR / "calibration" / "homographies.json",
+    )
+)
 # Optional calibration-point route. The ISSIA Annotation directory contains
 # Reference-Camera-{id}.bmp images with visible Fisso/Giallo/Bianco labels.
 # Put clicked image points here as camera_id -> label -> (x, y), and put the
@@ -98,3 +104,9 @@ PIPELINE_FRAME_STEP = 1
 PIPELINE_BATCH_SIZE = 1
 PIPELINE_NUM_WORKERS = 0
 PIPELINE_OUTPUT_PATH = DEBUG_OUTPUT_DIR / "tracking_results.jsonl"
+
+# Interactive calibration defaults
+CALIBRATION_CAMERAS = DEBUG_CAMERAS
+CALIBRATION_OUTPUT_DIR = DEBUG_OUTPUT_DIR / "calibration"
+CALIBRATION_WINDOW_MAX_WIDTH = 1600
+CALIBRATION_WINDOW_MAX_HEIGHT = 900

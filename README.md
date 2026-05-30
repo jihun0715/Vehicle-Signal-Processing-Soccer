@@ -45,8 +45,15 @@ VSP_Soccer_ws/
 ├── docker.sh
 ├── requirements.txt
 └── Vehicle-Signal-Processing-Soccer/
-    ├── README.md
-    └── LICENSE
+    ├── config.py
+    ├── main.py
+    ├── data/
+    ├── detectors/
+    ├── pipeline/
+    ├── projection/
+    ├── tracking/
+    ├── tools/
+    └── weights/
 ```
 
 `docker.sh`는 로컬의 전체 `VSP_Soccer_ws`를 컨테이너에 마운트합니다.
@@ -128,6 +135,45 @@ OpenCV import 확인:
 
 ```bash
 python -c "import cv2; print(cv2.__version__)"
+```
+
+## Project Layout
+
+레포 내부 코드는 아래처럼 나눕니다.
+
+```text
+Vehicle-Signal-Processing-Soccer/
+├── config.py              # 경로, 모델, dataloader, tracking 기본값
+├── main.py                # YOLO -> projection -> Kalman tracking 실행
+├── data/                  # ISSIA dataset/dataloader
+├── detectors/             # YOLO detector wrapper
+├── pipeline/              # end-to-end pipeline glue
+├── projection/            # image 좌표 -> world 좌표 projection
+├── tracking/              # world-frame Kalman filter tracker
+├── tools/                 # calibration/debug helper scripts
+├── weights/               # YOLO/MMPose 등 로컬 가중치
+└── debug_outputs/         # 실행 결과물, calibration 결과물
+```
+
+가중치는 기본적으로 `weights/` 아래에 둡니다. 현재 YOLO 기본 경로는:
+
+```text
+weights/yolo26x.pt
+```
+
+다른 weight를 쓰려면 `config.py`의 `YOLO_MODEL_PATH`를 바꾸거나 환경변수로 지정합니다.
+
+```bash
+YOLO_MODEL_PATH=/path/to/model.pt python main.py
+```
+
+주요 실행 명령:
+
+```bash
+python main.py
+python -m tools.calibration
+python -m tools.debug_dataset
+python -m tools.debug_video
 ```
 
 ## Docker Files

@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .kalman_filter import WorldObservation
+from tracking import WorldObservation
 
 
 @dataclass(frozen=True)
 class ProjectionConfig:
     homographies: Mapping[Any, Any] = field(default_factory=dict)
+    homography_path: Optional[Any] = None
     image_reference_points: Mapping[Any, Any] = field(default_factory=dict)
     world_reference_points: Mapping[Any, Any] = field(default_factory=dict)
     fallback_mode: str = "normalized_image"
@@ -25,6 +28,7 @@ class ProjectionConfig:
 
         return cls(
             homographies=project_config.CAMERA_IMAGE_TO_WORLD_HOMOGRAPHIES,
+            homography_path=project_config.CAMERA_IMAGE_TO_WORLD_HOMOGRAPHIES_PATH,
             image_reference_points=project_config.CAMERA_IMAGE_REFERENCE_POINTS,
             world_reference_points=project_config.WORLD_REFERENCE_POINTS,
             fallback_mode=project_config.PROJECTION_FALLBACK_MODE,
@@ -38,7 +42,8 @@ class ImageToWorldProjector:
 
     def __init__(self, projection_config: Optional[ProjectionConfig] = None) -> None:
         self.config = projection_config or ProjectionConfig()
-        self._homographies = _normalize_homographies(self.config.homographies)
+        self._homographies = _load_homographies_from_path(self.config.homography_path)
+        self._homographies.update(_normalize_homographies(self.config.homographies))
         self._homographies.update(
             _homographies_from_reference_points(
                 self.config.image_reference_points,
@@ -162,6 +167,21 @@ def _normalize_homographies(raw_homographies: Mapping[Any, Any]) -> Dict[int, np
             raise ValueError(f"Camera {camera_id} homography must be 3x3, got {matrix.shape}")
         homographies[camera_id] = matrix
     return homographies
+
+
+def _load_homographies_from_path(path: Optional[Any]) -> Dict[int, np.ndarray]:
+    if path in {None, ""}:
+        return {}
+
+    homography_path = Path(path)
+    if not homography_path.exists():
+        return {}
+
+    with homography_path.open("r", encoding="utf-8") as input_file:
+        payload = json.load(input_file)
+
+    raw_homographies = payload.get("homographies", payload)
+    return _normalize_homographies(raw_homographies)
 
 
 def _homographies_from_reference_points(

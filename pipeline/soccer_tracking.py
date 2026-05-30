@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict, Sequence, Tuple
 
 from detectors import YoloPersonDetector
-from utils import ImageToWorldProjector, KalmanTrackerConfig, WorldKalmanTracker
+from projection import ImageToWorldProjector
+from tracking import KalmanTrackerConfig, WorldKalmanTracker
 
 
 class SoccerTrackingPipeline:

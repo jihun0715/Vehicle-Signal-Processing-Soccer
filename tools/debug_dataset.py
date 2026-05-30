@@ -1,14 +1,20 @@
 """Quick checks for the ISSIA soccer dataloader.
 
 Example:
-    python debug.py
+    python -m tools.debug_dataset
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import cv2
 import numpy as np

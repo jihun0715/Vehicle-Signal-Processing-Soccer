@@ -1,4 +1,4 @@
-"""Utility modules for projection and tracking."""
+"""World-frame tracking utilities."""
 
 from .kalman_filter import (
     KalmanTrackerConfig,
@@ -6,12 +6,9 @@ from .kalman_filter import (
     WorldObservation,
     WorldTrack,
 )
-from .projection import ImageToWorldProjector, ProjectionConfig
 
 __all__ = [
-    "ImageToWorldProjector",
     "KalmanTrackerConfig",
-    "ProjectionConfig",
     "WorldKalmanTracker",
     "WorldObservation",
     "WorldTrack",
