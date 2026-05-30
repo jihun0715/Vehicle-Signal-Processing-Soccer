@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 # In Docker, docker.sh overrides this with /datasets/ISSIA-Soccer.
 # For another host path, edit this default or pass --root to debug.py.
-DEFAULT_ISSIA_SOCCER_ROOT = Path("/home/jihun/Documents/ISSIA-Soccer")
+DEFAULT_ISSIA_SOCCER_ROOT = Path("/media/jihun/Crucial X10/ISSIA-Soccer")
 ISSIA_SOCCER_ROOT = Path(os.environ.get("ISSIA_SOCCER_ROOT", DEFAULT_ISSIA_SOCCER_ROOT))
 
 ISSIA_CAMERAS = (1, 2, 3, 4, 5, 6)
