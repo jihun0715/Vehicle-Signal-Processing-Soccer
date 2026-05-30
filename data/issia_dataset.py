@@ -111,6 +111,43 @@ def discover_issia_cameras(root: PathLikeStr = DEFAULT_ISSIA_ROOT) -> List[int]:
     return sorted(camera_ids)
 
 
+def find_issia_reference_image(
+    root: PathLikeStr = DEFAULT_ISSIA_ROOT,
+    camera_id: int = 1,
+    *,
+    pattern: str = "Reference-Camera-{camera_id}.bmp",
+) -> Path:
+    """Return the reference BMP image for one ISSIA camera."""
+
+    root_path = Path(root)
+    reference_path = root_path / "Annotation" / pattern.format(camera_id=int(camera_id))
+    if not reference_path.exists():
+        raise FileNotFoundError(f"Cannot find camera {camera_id} reference image: {reference_path}")
+    return reference_path
+
+
+def discover_issia_reference_images(
+    root: PathLikeStr = DEFAULT_ISSIA_ROOT,
+    cameras: Optional[Sequence[int]] = None,
+    *,
+    pattern: str = "Reference-Camera-{camera_id}.bmp",
+) -> Dict[int, Path]:
+    """Return available ISSIA reference BMP images keyed by camera id."""
+
+    selected_cameras = tuple(cameras) if cameras is not None else tuple(discover_issia_cameras(root))
+    reference_images = {}
+    for camera_id in selected_cameras:
+        try:
+            reference_images[int(camera_id)] = find_issia_reference_image(
+                root,
+                int(camera_id),
+                pattern=pattern,
+            )
+        except FileNotFoundError:
+            continue
+    return reference_images
+
+
 def read_issia_annotations(
     root: PathLikeStr,
     camera_id: int,

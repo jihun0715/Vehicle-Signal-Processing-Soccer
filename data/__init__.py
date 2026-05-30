@@ -11,6 +11,8 @@ from .issia_dataset import (
     create_issia_dataloader,
     create_issia_offset_dataloader,
     discover_issia_cameras,
+    discover_issia_reference_images,
+    find_issia_reference_image,
     read_issia_annotations,
 )
 
@@ -25,5 +27,7 @@ __all__ = [
     "create_issia_dataloader",
     "create_issia_offset_dataloader",
     "discover_issia_cameras",
+    "discover_issia_reference_images",
+    "find_issia_reference_image",
     "read_issia_annotations",
 ]
