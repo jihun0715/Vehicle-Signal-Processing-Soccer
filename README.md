@@ -1,6 +1,27 @@
 # Vehicle-Signal-Processing-Soccer
 
-Vehicle Signal Processing soccer project workspace.
+멀티 카메라 축구 영상에서 선수 궤적과 포즈 신호를 이용해 카메라 간 시간 오프셋을 추정하는 프로젝트입니다.
+
+## Project Overview
+
+이 프로젝트의 목표는 서로 다른 카메라로 촬영된 축구 영상들을 공통 월드 좌표계와 시간축 위에서 맞추는 것입니다. 현재 구현은 전체 파이프라인 중 앞단인 데이터 로딩, 사람 검출, 월드 좌표 투영, 카메라별 트래킹까지를 중심으로 구성되어 있습니다.
+
+전체 흐름은 다음과 같습니다.
+
+1. ISSIA-Soccer 영상과 annotation을 dataloader로 읽습니다.
+2. YOLO를 사용해 각 카메라 프레임에서 사람만 검출합니다.
+3. reference image를 클릭 기반으로 캘리브레이션해 image 좌표를 축구장 world 좌표로 투영합니다.
+4. world 좌표계의 선수 위치 `px, py`를 이용해 카메라별 Kalman Filter tracking을 수행합니다.
+5. 이후 카메라 간 track matching, MMPose 기반 pose estimation, pose vector NCC를 이용한 temporal calibration으로 확장합니다.
+
+현재 주요 실행 진입점:
+
+```bash
+python main.py                 # YOLO -> projection -> Kalman tracking
+python -m tools.calibration    # reference BMP 클릭 기반 homography calibration
+python -m tools.debug_dataset  # ISSIA dataloader sanity check
+python -m tools.debug_video    # temporal offset debug video 생성
+```
 
 이 레포는 로컬 git repository를 그대로 유지한 상태에서, `VSP_Soccer_ws`에 준비된 Docker 환경 안에서 개발/실행하는 것을 기준으로 합니다.
 
@@ -61,7 +82,7 @@ VSP_Soccer_ws/
 Local path:
 
 ```text
-/home/jihun/Documents/VSP_Soccer_ws
+<your VSP_Soccer_ws path>
 ```
 
 Container path:
@@ -81,7 +102,7 @@ Container path:
 Docker image는 `VSP_Soccer_ws/`에서 빌드합니다.
 
 ```bash
-cd /home/jihun/Documents/VSP_Soccer_ws
+cd <your VSP_Soccer_ws path>
 sudo docker build -t vspsoccer-image:latest .
 ```
 
@@ -92,7 +113,7 @@ sudo docker build -t vspsoccer-image:latest .
 컨테이너 실행:
 
 ```bash
-cd /home/jihun/Documents/VSP_Soccer_ws
+cd <your VSP_Soccer_ws path>
 chmod +x docker.sh
 ./docker.sh
 ```
@@ -108,8 +129,8 @@ chmod +x docker.sh
 - IPC: host IPC for PyTorch dataloader/shared memory
 - device access: `/dev`
 - display forwarding: `/tmp/.X11-unix`, `DISPLAY`
-- workspace mount: `/home/jihun/Documents/VSP_Soccer_ws` -> `/workspace/VSP_Soccer_ws`
-- SSD mount: `/media/jihun/Crucial X10` -> `/ssd`
+- workspace mount: `<your VSP_Soccer_ws path>` -> `/workspace/VSP_Soccer_ws`
+- dataset/SSD mount: `<your ISSIA parent data path>` -> `/ssd`
 
 ## Inside The Container
 
@@ -181,9 +202,9 @@ python -m tools.debug_video
 Docker 관련 파일은 git repository 바깥의 `VSP_Soccer_ws/`에 있습니다.
 
 ```text
-/home/jihun/Documents/VSP_Soccer_ws/Dockerfile
-/home/jihun/Documents/VSP_Soccer_ws/docker.sh
-/home/jihun/Documents/VSP_Soccer_ws/requirements.txt
+<your VSP_Soccer_ws path>/Dockerfile
+<your VSP_Soccer_ws path>/docker.sh
+<your VSP_Soccer_ws path>/requirements.txt
 ```
 
 ### Dockerfile Summary
@@ -219,3 +240,122 @@ sudo docker rm VSPSoccer-container
 - 컨테이너 실행 전에 Docker image 이름이 `vspsoccer-image:latest`로 빌드되어 있어야 합니다.
 - `docker.sh`는 GPU 0번만 사용하도록 설정되어 있습니다. 다른 GPU를 사용하려면 `--gpus "device=0"`과 `CUDA_VISIBLE_DEVICES=0` 값을 수정하면 됩니다.
 - OpenCV GUI 창을 사용하려면 호스트의 X11 권한이 필요하며, `docker.sh`에서 `xhost +local:docker`를 실행합니다.
+
+## Full Dockerfile
+
+아래는 이 프로젝트에서 실제로 사용한 Dockerfile입니다. `requirements.txt`는 Dockerfile과 같은 `VSP_Soccer_ws/` 디렉토리에 있어야 합니다.
+
+```dockerfile
+# NVIDIA CUDA 기반 이미지 사용
+FROM nvidia/cuda:11.7.1-cudnn8-devel-ubuntu20.04
+
+# Set environment variables to prevent tzdata from prompting for geographic area
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+# 필수 패키지 및 OpenCV/GUI dependency 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    bzip2 \
+    curl \
+    git \
+    build-essential \
+    ninja-build \
+    unzip \
+    python3-pip \
+    python3-dev \
+    nano \
+    python-is-python3 \
+    cmake \
+    pkg-config \
+    ffmpeg \
+    libglib2.0-0 \
+    libopencv-dev \
+    libgl1-mesa-glx \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libfontconfig1 \
+    libdbus-1-3 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcb-glx0 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-shm0 \
+    libxcb-sync1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-shape0 \
+    libxcb-xfixes0 \
+    libxcb-xinerama0 \
+    libxcb-xkb1 \
+    libxcb-cursor0 \
+    libxkbcommon0 \
+    libxkbcommon-x11-0 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m pip install --upgrade pip setuptools wheel
+
+# PyTorch CUDA 11.7 설치
+RUN python -m pip install "networkx<3.0"
+RUN python -m pip install \
+    torch==2.0.1+cu117 \
+    torchvision==0.15.2+cu117 \
+    torchaudio==2.0.2+cu117 \
+    --extra-index-url https://download.pytorch.org/whl/cu117
+
+# requirements.txt 복사
+COPY requirements.txt /home/requirements.txt
+
+# 필요한 패키지 설치
+RUN python -m pip install -r /home/requirements.txt
+
+# Ultralytics YOLO 설치
+RUN python -m pip install "ultralytics==8.4.53"
+
+# MMPose/OpenMMLab 설치
+# mmcv는 PyTorch 2.0.x + CUDA 11.7 prebuilt wheel을 명시해서 source build를 피한다.
+RUN python -m pip install "openmim==0.3.9" \
+    && python -m pip install "mmengine==0.10.7" \
+    && python -m pip install "mmcv==2.1.0" \
+        -f https://download.openmmlab.com/mmcv/dist/cu117/torch2.0.0/index.html \
+    && mim install "mmdet==3.2.0" \
+    && mim install "mmpose==1.3.2" \
+    && rm -rf /root/.cache/pip /root/.cache/mim
+
+# 주요 패키지 import 확인
+RUN python -c "import torch, ultralytics, mmcv, mmengine, mmdet, mmpose; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('ultralytics', ultralytics.__version__); print('mmcv', mmcv.__version__); print('mmengine', mmengine.__version__); print('mmdet', mmdet.__version__); print('mmpose', mmpose.__version__)"
+
+# 작업 디렉토리 설정
+WORKDIR /home
+```
+
+## Full docker.sh
+
+아래는 이 프로젝트에서 실제로 사용한 실행 스크립트입니다. 로컬 경로는 본인 환경에 맞게 `<your ...>` 부분만 바꿔서 사용합니다.
+
+```bash
+#!/bin/bash
+# sudo docker build -t vspsoccer-image:latest .
+xhost +local:docker
+xhost +local:root
+sudo docker run --name VSPSoccer-container -it \
+  --privileged \
+  --gpus "device=0" \
+  --net=host \
+  --ipc=host \
+  -e DISPLAY=$DISPLAY \
+  -e QT_X11_NO_MITSHM=1 \
+  -e CUDA_VISIBLE_DEVICES=0 \
+  -e ISSIA_SOCCER_ROOT=/ssd/ISSIA-Soccer \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+  -v /dev:/dev \
+  -v <your VSP_Soccer_ws path>:/workspace/VSP_Soccer_ws \
+  -v "<your ISSIA parent data path>:/ssd" \
+  vspsoccer-image:latest
+```
