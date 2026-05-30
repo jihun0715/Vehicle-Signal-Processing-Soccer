@@ -50,7 +50,12 @@ VIPER_NS = {
     "data": "http://lamp.cfar.umd.edu/viperdata#",
 }
 
-DEFAULT_ISSIA_ROOT = Path(os.environ.get("ISSIA_SOCCER_ROOT", "/datasets/ISSIA-Soccer"))
+try:
+    from config import ISSIA_SOCCER_ROOT
+except ImportError:
+    ISSIA_SOCCER_ROOT = Path(os.environ.get("ISSIA_SOCCER_ROOT", "/datasets/ISSIA-Soccer"))
+
+DEFAULT_ISSIA_ROOT = Path(ISSIA_SOCCER_ROOT)
 
 
 @dataclass(frozen=True)
