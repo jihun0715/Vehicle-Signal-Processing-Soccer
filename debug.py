@@ -21,6 +21,7 @@ from data import (
     ISSIASoccerFrameDataset,
     ISSIASoccerSyncDataset,
     create_issia_dataloader,
+    create_issia_offset_dataloader,
     discover_issia_cameras,
     read_issia_annotations,
 )
@@ -145,6 +146,28 @@ def main() -> None:
         print(f"Batch metas: {[short_meta(meta) for meta in batch['metas']]}")
     except ImportError as exc:
         print(f"Skipped DataLoader check because PyTorch is unavailable: {exc}")
+
+    print_header("Offset DataLoader")
+    try:
+        offset_loader = create_issia_offset_dataloader(
+            root,
+            cameras=cameras[: min(2, len(cameras))],
+            batch_size=1,
+            num_workers=args.num_workers,
+            frame_step=args.frame_step,
+            load_images=False,
+            return_tensors=False,
+            include_empty=True,
+            start_frame=500,
+            end_frame=500 + args.frame_step,
+            max_frame_offset=30,
+            random_seed=3,
+        )
+        offset_batch = next(iter(offset_loader))
+        print(f"Offset batch base frames: {offset_batch['base_frame_indices']}")
+        print(f"Offset GT: {offset_batch['time_offset_gt'][0]}")
+    except ImportError as exc:
+        print(f"Skipped offset DataLoader check because PyTorch is unavailable: {exc}")
 
     frame_dataset.close()
     sync_dataset.close()

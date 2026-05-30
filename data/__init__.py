@@ -9,6 +9,7 @@ from .issia_dataset import (
     ISSIASoccerSyncDataset,
     collate_issia_samples,
     create_issia_dataloader,
+    create_issia_offset_dataloader,
     discover_issia_cameras,
     read_issia_annotations,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "ISSIASoccerSyncDataset",
     "collate_issia_samples",
     "create_issia_dataloader",
+    "create_issia_offset_dataloader",
     "discover_issia_cameras",
     "read_issia_annotations",
 ]

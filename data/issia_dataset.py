@@ -724,6 +724,30 @@ def create_issia_dataloader(
     )
 
 
+def create_issia_offset_dataloader(
+    root: PathLikeStr = DEFAULT_ISSIA_ROOT,
+    cameras: Sequence[int] = (1, 2),
+    *,
+    batch_size: int = 1,
+    shuffle: bool = False,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+    **dataset_kwargs: Any,
+) -> Any:
+    """Create a DataLoader for temporally shifted synchronized ISSIA samples."""
+
+    return create_issia_dataloader(
+        root,
+        cameras,
+        offset_synchronized=True,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        **dataset_kwargs,
+    )
+
+
 def _append_person_annotations(
     obj: ET.Element,
     frame_to_detections: Dict[int, List[ISSIADetection]],
