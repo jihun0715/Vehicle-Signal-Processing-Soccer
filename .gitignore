@@ -1,7 +1,6 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-debug_outputs/
 weights/*.pt
 weights/*.pth
 weights/*.onnx

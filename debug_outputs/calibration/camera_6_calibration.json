@@ -1,0 +1,117 @@
+{
+  "camera_id": 6,
+  "image_path": "/ssd/ISSIA-Soccer/Annotation/Reference-Camera-6.bmp",
+  "field_length_m": 105.0,
+  "field_width_m": 68.0,
+  "world_coordinate_system": {
+    "origin": "field_center",
+    "x_axis": "east_positive_long_axis",
+    "y_axis": "north_positive_short_axis",
+    "units": "meters"
+  },
+  "image_points": {
+    "SW_CORNER": [
+      1641.6,
+      115.19999999999999
+    ],
+    "WEST_PENALTY_NE": [
+      1023.5999999999999,
+      703.1999999999999
+    ],
+    "WEST_PENALTY_SE": [
+      1003.1999999999999,
+      208.79999999999998
+    ],
+    "WEST_PENALTY_SW": [
+      1717.1999999999998,
+      207.6
+    ],
+    "WEST_GOAL_AREA_NE": [
+      1652.3999999999999,
+      523.1999999999999
+    ],
+    "WEST_GOAL_AREA_SE": [
+      1534.8,
+      303.59999999999997
+    ],
+    "WEST_GOAL_AREA_SW": [
+      1798.8,
+      303.59999999999997
+    ],
+    "WEST_PENALTY_SPOT": [
+      1299.6,
+      403.2
+    ],
+    "WEST_GOAL_CENTER": [
+      1879.1999999999998,
+      405.59999999999997
+    ]
+  },
+  "world_points": {
+    "SW_CORNER": [
+      -52.5,
+      -34.0
+    ],
+    "WEST_PENALTY_NE": [
+      -36.0,
+      20.16
+    ],
+    "WEST_PENALTY_SE": [
+      -36.0,
+      -20.16
+    ],
+    "WEST_PENALTY_SW": [
+      -52.5,
+      -20.16
+    ],
+    "WEST_GOAL_AREA_NE": [
+      -47.0,
+      9.16
+    ],
+    "WEST_GOAL_AREA_SE": [
+      -47.0,
+      -9.16
+    ],
+    "WEST_GOAL_AREA_SW": [
+      -52.5,
+      -9.16
+    ],
+    "WEST_PENALTY_SPOT": [
+      -41.5,
+      0.0
+    ],
+    "WEST_GOAL_CENTER": [
+      -52.5,
+      0.0
+    ]
+  },
+  "homography_image_to_world": [
+    [
+      -0.03310725800497133,
+      -0.05879569075964642,
+      -3.5104457426962243
+    ],
+    [
+      -0.0005789643001926563,
+      0.1444094606240331,
+      -57.172391865676474
+    ],
+    [
+      2.3971523760561666e-05,
+      0.0016395773777489247,
+      1.0
+    ]
+  ],
+  "reprojection_errors_m": {
+    "SW_CORNER": 0.25379463635241334,
+    "WEST_PENALTY_NE": 0.17111734972992718,
+    "WEST_PENALTY_SE": 0.14451629907073701,
+    "WEST_PENALTY_SW": 0.24422736525668495,
+    "WEST_GOAL_AREA_NE": 0.10848878060576234,
+    "WEST_GOAL_AREA_SE": 0.11009915071753289,
+    "WEST_GOAL_AREA_SW": 0.16684299111435535,
+    "WEST_PENALTY_SPOT": 0.17815420436504542,
+    "WEST_GOAL_CENTER": 0.21835777996530525
+  },
+  "reprojection_rmse_m": 0.18420160882743067
+}

@@ -1,0 +1,99 @@
+{
+  "camera_id": 3,
+  "image_path": "/ssd/ISSIA-Soccer/Annotation/Reference-Camera-3.bmp",
+  "field_length_m": 105.0,
+  "field_width_m": 68.0,
+  "world_coordinate_system": {
+    "origin": "field_center",
+    "x_axis": "east_positive_long_axis",
+    "y_axis": "north_positive_short_axis",
+    "units": "meters"
+  },
+  "image_points": {
+    "CENTER": [
+      945.5999999999999,
+      398.4
+    ],
+    "HALF_NORTH": [
+      945.5999999999999,
+      100.8
+    ],
+    "HALF_SOUTH": [
+      945.5999999999999,
+      1026.0
+    ],
+    "CENTER_CIRCLE_NORTH": [
+      945.5999999999999,
+      304.8
+    ],
+    "CENTER_CIRCLE_SOUTH": [
+      943.1999999999999,
+      519.6
+    ],
+    "CENTER_CIRCLE_WEST": [
+      445.2,
+      404.4
+    ],
+    "CENTER_CIRCLE_EAST": [
+      1443.6,
+      402.0
+    ]
+  },
+  "world_points": {
+    "CENTER": [
+      0.0,
+      0.0
+    ],
+    "HALF_NORTH": [
+      0.0,
+      34.0
+    ],
+    "HALF_SOUTH": [
+      0.0,
+      -34.0
+    ],
+    "CENTER_CIRCLE_NORTH": [
+      0.0,
+      9.15
+    ],
+    "CENTER_CIRCLE_SOUTH": [
+      0.0,
+      -9.15
+    ],
+    "CENTER_CIRCLE_WEST": [
+      -9.15,
+      0.0
+    ],
+    "CENTER_CIRCLE_EAST": [
+      9.15,
+      0.0
+    ]
+  },
+  "homography_image_to_world": [
+    [
+      0.028000854523034586,
+      2.92994916279678e-05,
+      -26.476927151967885
+    ],
+    [
+      -0.00030611076628690823,
+      -0.12793992531261789,
+      51.70736556360602
+    ],
+    [
+      -1.3357152884420328e-06,
+      0.0013118102678557127,
+      1.0
+    ]
+  ],
+  "reprojection_errors_m": {
+    "CENTER": 0.2936919342083638,
+    "HALF_NORTH": 0.06080324052259949,
+    "HALF_SOUTH": 0.05706188067838065,
+    "CENTER_CIRCLE_NORTH": 0.2683314182800966,
+    "CENTER_CIRCLE_SOUTH": 0.1907056398711352,
+    "CENTER_CIRCLE_WEST": 0.10969431739831863,
+    "CENTER_CIRCLE_EAST": 0.10907648857913095
+  },
+  "reprojection_rmse_m": 0.17948695107713317
+}
