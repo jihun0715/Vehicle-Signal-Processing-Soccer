@@ -100,8 +100,14 @@ class ImageToWorldProjector:
         height, width = image_size
         if width <= 0 or height <= 0:
             raise ValueError(f"Invalid image_size: {image_size}")
-        world_x = float(point_xy[0]) / float(width) * float(self.config.field_length_m)
-        world_y = float(point_xy[1]) / float(height) * float(self.config.field_width_m)
+        world_x = (
+            float(point_xy[0]) / float(width) * float(self.config.field_length_m)
+            - float(self.config.field_length_m) * 0.5
+        )
+        world_y = (
+            float(self.config.field_width_m) * 0.5
+            - float(point_xy[1]) / float(height) * float(self.config.field_width_m)
+        )
         return (
             world_x,
             world_y,

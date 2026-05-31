@@ -34,46 +34,58 @@ PENALTY_SPOT_DISTANCE_M = 11.0
 CENTER_CIRCLE_RADIUS_M = 9.15
 
 
-def _centered_top(width_m: float) -> float:
-    return (FIELD_WIDTH_M - float(width_m)) * 0.5
+def _west_x(distance_from_west_goal_line_m: float = 0.0) -> float:
+    return -FIELD_LENGTH_M * 0.5 + float(distance_from_west_goal_line_m)
 
 
-def _centered_bottom(width_m: float) -> float:
-    return FIELD_WIDTH_M - _centered_top(width_m)
+def _east_x(distance_from_east_goal_line_m: float = 0.0) -> float:
+    return FIELD_LENGTH_M * 0.5 - float(distance_from_east_goal_line_m)
 
 
+def _north_y(width_m: float) -> float:
+    return float(width_m) * 0.5
+
+
+def _south_y(width_m: float) -> float:
+    return -float(width_m) * 0.5
+
+
+# World coordinate convention:
+# - origin: center of the field
+# - +x: East, along the long axis
+# - +y: North, along the short axis
 LANDMARKS = {
-    "NW_CORNER": (0.0, 0.0),
-    "NE_CORNER": (FIELD_LENGTH_M, 0.0),
-    "SE_CORNER": (FIELD_LENGTH_M, FIELD_WIDTH_M),
-    "SW_CORNER": (0.0, FIELD_WIDTH_M),
-    "CENTER": (FIELD_LENGTH_M * 0.5, FIELD_WIDTH_M * 0.5),
-    "HALF_NORTH": (FIELD_LENGTH_M * 0.5, 0.0),
-    "HALF_SOUTH": (FIELD_LENGTH_M * 0.5, FIELD_WIDTH_M),
-    "WEST_GOAL_CENTER": (0.0, FIELD_WIDTH_M * 0.5),
-    "EAST_GOAL_CENTER": (FIELD_LENGTH_M, FIELD_WIDTH_M * 0.5),
-    "WEST_PENALTY_SPOT": (PENALTY_SPOT_DISTANCE_M, FIELD_WIDTH_M * 0.5),
-    "EAST_PENALTY_SPOT": (FIELD_LENGTH_M - PENALTY_SPOT_DISTANCE_M, FIELD_WIDTH_M * 0.5),
-    "WEST_PENALTY_NW": (0.0, _centered_top(PENALTY_AREA_WIDTH_M)),
-    "WEST_PENALTY_NE": (PENALTY_AREA_DEPTH_M, _centered_top(PENALTY_AREA_WIDTH_M)),
-    "WEST_PENALTY_SE": (PENALTY_AREA_DEPTH_M, _centered_bottom(PENALTY_AREA_WIDTH_M)),
-    "WEST_PENALTY_SW": (0.0, _centered_bottom(PENALTY_AREA_WIDTH_M)),
-    "EAST_PENALTY_NW": (FIELD_LENGTH_M - PENALTY_AREA_DEPTH_M, _centered_top(PENALTY_AREA_WIDTH_M)),
-    "EAST_PENALTY_NE": (FIELD_LENGTH_M, _centered_top(PENALTY_AREA_WIDTH_M)),
-    "EAST_PENALTY_SE": (FIELD_LENGTH_M, _centered_bottom(PENALTY_AREA_WIDTH_M)),
-    "EAST_PENALTY_SW": (FIELD_LENGTH_M - PENALTY_AREA_DEPTH_M, _centered_bottom(PENALTY_AREA_WIDTH_M)),
-    "WEST_GOAL_AREA_NW": (0.0, _centered_top(GOAL_AREA_WIDTH_M)),
-    "WEST_GOAL_AREA_NE": (GOAL_AREA_DEPTH_M, _centered_top(GOAL_AREA_WIDTH_M)),
-    "WEST_GOAL_AREA_SE": (GOAL_AREA_DEPTH_M, _centered_bottom(GOAL_AREA_WIDTH_M)),
-    "WEST_GOAL_AREA_SW": (0.0, _centered_bottom(GOAL_AREA_WIDTH_M)),
-    "EAST_GOAL_AREA_NW": (FIELD_LENGTH_M - GOAL_AREA_DEPTH_M, _centered_top(GOAL_AREA_WIDTH_M)),
-    "EAST_GOAL_AREA_NE": (FIELD_LENGTH_M, _centered_top(GOAL_AREA_WIDTH_M)),
-    "EAST_GOAL_AREA_SE": (FIELD_LENGTH_M, _centered_bottom(GOAL_AREA_WIDTH_M)),
-    "EAST_GOAL_AREA_SW": (FIELD_LENGTH_M - GOAL_AREA_DEPTH_M, _centered_bottom(GOAL_AREA_WIDTH_M)),
-    "CENTER_CIRCLE_NORTH": (FIELD_LENGTH_M * 0.5, FIELD_WIDTH_M * 0.5 - CENTER_CIRCLE_RADIUS_M),
-    "CENTER_CIRCLE_SOUTH": (FIELD_LENGTH_M * 0.5, FIELD_WIDTH_M * 0.5 + CENTER_CIRCLE_RADIUS_M),
-    "CENTER_CIRCLE_WEST": (FIELD_LENGTH_M * 0.5 - CENTER_CIRCLE_RADIUS_M, FIELD_WIDTH_M * 0.5),
-    "CENTER_CIRCLE_EAST": (FIELD_LENGTH_M * 0.5 + CENTER_CIRCLE_RADIUS_M, FIELD_WIDTH_M * 0.5),
+    "NW_CORNER": (_west_x(), _north_y(FIELD_WIDTH_M)),
+    "NE_CORNER": (_east_x(), _north_y(FIELD_WIDTH_M)),
+    "SE_CORNER": (_east_x(), _south_y(FIELD_WIDTH_M)),
+    "SW_CORNER": (_west_x(), _south_y(FIELD_WIDTH_M)),
+    "CENTER": (0.0, 0.0),
+    "HALF_NORTH": (0.0, _north_y(FIELD_WIDTH_M)),
+    "HALF_SOUTH": (0.0, _south_y(FIELD_WIDTH_M)),
+    "WEST_GOAL_CENTER": (_west_x(), 0.0),
+    "EAST_GOAL_CENTER": (_east_x(), 0.0),
+    "WEST_PENALTY_SPOT": (_west_x(PENALTY_SPOT_DISTANCE_M), 0.0),
+    "EAST_PENALTY_SPOT": (_east_x(PENALTY_SPOT_DISTANCE_M), 0.0),
+    "WEST_PENALTY_NW": (_west_x(), _north_y(PENALTY_AREA_WIDTH_M)),
+    "WEST_PENALTY_NE": (_west_x(PENALTY_AREA_DEPTH_M), _north_y(PENALTY_AREA_WIDTH_M)),
+    "WEST_PENALTY_SE": (_west_x(PENALTY_AREA_DEPTH_M), _south_y(PENALTY_AREA_WIDTH_M)),
+    "WEST_PENALTY_SW": (_west_x(), _south_y(PENALTY_AREA_WIDTH_M)),
+    "EAST_PENALTY_NW": (_east_x(PENALTY_AREA_DEPTH_M), _north_y(PENALTY_AREA_WIDTH_M)),
+    "EAST_PENALTY_NE": (_east_x(), _north_y(PENALTY_AREA_WIDTH_M)),
+    "EAST_PENALTY_SE": (_east_x(), _south_y(PENALTY_AREA_WIDTH_M)),
+    "EAST_PENALTY_SW": (_east_x(PENALTY_AREA_DEPTH_M), _south_y(PENALTY_AREA_WIDTH_M)),
+    "WEST_GOAL_AREA_NW": (_west_x(), _north_y(GOAL_AREA_WIDTH_M)),
+    "WEST_GOAL_AREA_NE": (_west_x(GOAL_AREA_DEPTH_M), _north_y(GOAL_AREA_WIDTH_M)),
+    "WEST_GOAL_AREA_SE": (_west_x(GOAL_AREA_DEPTH_M), _south_y(GOAL_AREA_WIDTH_M)),
+    "WEST_GOAL_AREA_SW": (_west_x(), _south_y(GOAL_AREA_WIDTH_M)),
+    "EAST_GOAL_AREA_NW": (_east_x(GOAL_AREA_DEPTH_M), _north_y(GOAL_AREA_WIDTH_M)),
+    "EAST_GOAL_AREA_NE": (_east_x(), _north_y(GOAL_AREA_WIDTH_M)),
+    "EAST_GOAL_AREA_SE": (_east_x(), _south_y(GOAL_AREA_WIDTH_M)),
+    "EAST_GOAL_AREA_SW": (_east_x(GOAL_AREA_DEPTH_M), _south_y(GOAL_AREA_WIDTH_M)),
+    "CENTER_CIRCLE_NORTH": (0.0, CENTER_CIRCLE_RADIUS_M),
+    "CENTER_CIRCLE_SOUTH": (0.0, -CENTER_CIRCLE_RADIUS_M),
+    "CENTER_CIRCLE_WEST": (-CENTER_CIRCLE_RADIUS_M, 0.0),
+    "CENTER_CIRCLE_EAST": (CENTER_CIRCLE_RADIUS_M, 0.0),
 }
 
 DEFAULT_LANDMARK_ORDER = (
@@ -259,6 +271,12 @@ def _save_calibration(state: CalibrationState) -> None:
         "image_path": str(state.image_path),
         "field_length_m": FIELD_LENGTH_M,
         "field_width_m": FIELD_WIDTH_M,
+        "world_coordinate_system": {
+            "origin": "field_center",
+            "x_axis": "east_positive_long_axis",
+            "y_axis": "north_positive_short_axis",
+            "units": "meters",
+        },
         "image_points": {
             label: [float(value) for value in state.image_points[label]]
             for label in labels
@@ -280,6 +298,12 @@ def _save_calibration(state: CalibrationState) -> None:
     combined = _load_combined_payload(combined_path)
     combined["field_length_m"] = FIELD_LENGTH_M
     combined["field_width_m"] = FIELD_WIDTH_M
+    combined["world_coordinate_system"] = {
+        "origin": "field_center",
+        "x_axis": "east_positive_long_axis",
+        "y_axis": "north_positive_short_axis",
+        "units": "meters",
+    }
     combined.setdefault("homographies", {})[str(state.camera_id)] = homography.tolist()
     combined.setdefault("camera_calibrations", {})[str(state.camera_id)] = camera_payload
     combined_path.parent.mkdir(parents=True, exist_ok=True)
