@@ -5,5 +5,5 @@ weights/*.pt
 weights/*.pth
 weights/*.onnx
 !weights/.gitkeep
-debug_outputs/tracking_visualizations
+debug_outputs/tracking_visualizations/*
 debug_outputs/pipeline_profile.json
