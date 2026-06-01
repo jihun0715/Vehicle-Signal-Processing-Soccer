@@ -1,6 +1,11 @@
-"""Create a quick top/bottom video for temporally shifted camera streams.
+"""카메라 간 temporal offset dataset을 영상으로 확인하는 CLI tool.
 
-Example:
+클래스는 없고, 주요 함수는 다음과 같다.
+- `main`: offset dataloader를 만들고 GT offset을 출력한 뒤 debug mp4를 저장한다.
+- `build_canvas`: 여러 카메라 프레임을 상하분할 canvas로 합친다.
+- `draw_boxes`, `draw_panel_text`: annotation bbox와 frame/offset 정보를 영상 위에 그린다.
+
+실행 예:
     python -m tools.debug_video
 """
 

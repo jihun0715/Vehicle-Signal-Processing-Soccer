@@ -1,17 +1,24 @@
-"""PyTorch datasets for the ISSIA-CNR soccer dataset.
+"""ISSIA-CNR Soccer 데이터셋을 PyTorch Dataset/DataLoader로 다루는 모듈.
 
-The local ISSIA-Soccer dump is expected to keep the original layout:
+주요 클래스:
+- `ISSIADetection`: 한 프레임의 person/ball annotation 한 개를 담는 데이터 클래스.
+- `ISSIAFrameRecord`: 카메라, 프레임 번호, timestamp, video path, image size를 담는 인덱스 record.
+- `ISSIASoccerFrameDataset`: 단일 카메라 프레임 단위 sample을 반환하며, 2/4/6번 카메라는 영상과 bbox를 좌우반전한다.
+- `ISSIASoccerSyncDataset`: 여러 카메라의 같은 frame index를 하나의 synchronized sample로 묶는다.
+- `ISSIASoccerOffsetSyncDataset`: 카메라별 고정 frame offset을 적용해 time-sync가 어긋난 sample과 GT offset을 만든다.
+
+주요 함수:
+- `read_issia_annotations`: VIPER/xgtf annotation을 frame별 detection 목록으로 파싱한다.
+- `create_issia_dataloader`, `create_issia_offset_dataloader`: variable-length target을 처리하는 DataLoader를 만든다.
+- `discover_issia_cameras`, `find_issia_reference_image`: 데이터셋 내부 camera/reference BMP 파일을 찾는다.
+
+로컬 ISSIA-Soccer dump는 아래 원본 구조를 유지한다고 가정한다:
 
     ISSIA-Soccer/
     |-- Annotation/
     |   `-- Film Role-0 ID-1 ... .xgtf
     `-- Sequences/
         `-- Film Role-0 ID-1 ... .avi
-
-The returned samples keep detection metadata as first-class values because this
-project uses the data as an input stream for detection, projection, tracking,
-track matching, pose estimation, and temporal calibration rather than as a
-single supervised training dataset.
 """
 
 from __future__ import annotations
@@ -51,11 +58,15 @@ VIPER_NS = {
 }
 
 try:
-    from config import ISSIA_SOCCER_ROOT
+    from config import ISSIA_SOCCER_ROOT, ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS
 except ImportError:
     ISSIA_SOCCER_ROOT = Path(os.environ.get("ISSIA_SOCCER_ROOT", "/datasets/ISSIA-Soccer"))
+    ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS = (2, 4, 6)
 
 DEFAULT_ISSIA_ROOT = Path(ISSIA_SOCCER_ROOT)
+DEFAULT_HORIZONTAL_FLIP_CAMERAS = tuple(
+    int(camera_id) for camera_id in ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS
+)
 
 
 @dataclass(frozen=True)
@@ -226,6 +237,7 @@ class ISSIASoccerFrameDataset(Dataset):
         image_mode: str = "rgb",
         load_images: bool = True,
         return_tensors: bool = True,
+        horizontal_flip_cameras: Optional[Sequence[int]] = None,
         transform: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
     ) -> None:
         if frame_step < 1:
@@ -246,6 +258,11 @@ class ISSIASoccerFrameDataset(Dataset):
         self.image_mode = image_mode
         self.load_images = load_images
         self.return_tensors = return_tensors
+        self.horizontal_flip_cameras = (
+            DEFAULT_HORIZONTAL_FLIP_CAMERAS
+            if horizontal_flip_cameras is None
+            else tuple(int(camera_id) for camera_id in horizontal_flip_cameras)
+        )
         self.transform = transform
         self._captures: Dict[int, cv2.VideoCapture] = {}
 
@@ -256,6 +273,7 @@ class ISSIASoccerFrameDataset(Dataset):
 
     def __getitem__(self, index: int) -> Dict[str, Any]:
         record = self.records[index]
+        horizontal_flipped = self._should_horizontal_flip(record.camera_id)
         image = self._read_image(record) if self.load_images else None
         target = self._build_target(record)
         meta = {
@@ -265,6 +283,7 @@ class ISSIASoccerFrameDataset(Dataset):
             "frame_index": record.frame_index,
             "timestamp_sec": record.timestamp_sec,
             "image_size": record.image_size,
+            "horizontal_flipped": horizontal_flipped,
         }
 
         sample = {
@@ -341,12 +360,15 @@ class ISSIASoccerFrameDataset(Dataset):
         return records
 
     def _build_target(self, record: ISSIAFrameRecord) -> Dict[str, Any]:
-        boxes = np.asarray([det.bbox_xyxy for det in record.detections], dtype=np.float32)
+        detections = self._detections_for_record(record)
+        horizontal_flipped = self._should_horizontal_flip(record.camera_id)
+
+        boxes = np.asarray([det.bbox_xyxy for det in detections], dtype=np.float32)
         if boxes.size == 0:
             boxes = np.zeros((0, 4), dtype=np.float32)
 
-        labels = np.asarray([det.label_id for det in record.detections], dtype=np.int64)
-        object_ids = np.asarray([det.object_id for det in record.detections], dtype=np.int64)
+        labels = np.asarray([det.label_id for det in detections], dtype=np.int64)
+        object_ids = np.asarray([det.object_id for det in detections], dtype=np.int64)
         is_ball = labels == BALL_LABEL
 
         if self.return_tensors:
@@ -365,11 +387,12 @@ class ISSIASoccerFrameDataset(Dataset):
             "labels": labels_out,
             "object_ids": object_ids_out,
             "is_ball": is_ball_out,
-            "detections": [det.to_dict() for det in record.detections],
+            "detections": [det.to_dict() for det in detections],
             "camera_id": record.camera_id,
             "frame_index": record.frame_index,
             "timestamp_sec": record.timestamp_sec,
             "image_size": record.image_size,
+            "horizontal_flipped": horizontal_flipped,
             "label_names": LABEL_NAMES,
         }
 
@@ -384,9 +407,19 @@ class ISSIASoccerFrameDataset(Dataset):
             )
         if self.image_mode == "rgb":
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if self._should_horizontal_flip(record.camera_id):
+            frame = cv2.flip(frame, 1)
         if self.return_tensors:
             return torch.from_numpy(np.ascontiguousarray(frame)).permute(2, 0, 1).float() / 255.0
         return frame
+
+    def _detections_for_record(self, record: ISSIAFrameRecord) -> Tuple[ISSIADetection, ...]:
+        if not self._should_horizontal_flip(record.camera_id):
+            return record.detections
+        return tuple(_horizontal_flip_detection(det, record.image_size) for det in record.detections)
+
+    def _should_horizontal_flip(self, camera_id: int) -> bool:
+        return int(camera_id) in self.horizontal_flip_cameras
 
     def _get_capture(self, camera_id: int, video_path: Path) -> cv2.VideoCapture:
         capture = self._captures.get(camera_id)
@@ -854,6 +887,41 @@ def _append_ball_annotations(
                     point_xy=(x, y),
                 )
             )
+
+
+def _horizontal_flip_detection(
+    detection: ISSIADetection,
+    image_size: Tuple[int, int],
+) -> ISSIADetection:
+    _height, width = image_size
+    return ISSIADetection(
+        camera_id=detection.camera_id,
+        frame_index=detection.frame_index,
+        label=detection.label,
+        label_id=detection.label_id,
+        bbox_xyxy=_horizontal_flip_bbox(detection.bbox_xyxy, width),
+        object_id=detection.object_id,
+        point_xy=_horizontal_flip_point(detection.point_xy, width),
+    )
+
+
+def _horizontal_flip_bbox(
+    bbox_xyxy: Tuple[float, float, float, float],
+    image_width: int,
+) -> Tuple[float, float, float, float]:
+    x1, y1, x2, y2 = bbox_xyxy
+    width = float(image_width)
+    return (width - x2, y1, width - x1, y2)
+
+
+def _horizontal_flip_point(
+    point_xy: Optional[Tuple[float, float]],
+    image_width: int,
+) -> Optional[Tuple[float, float]]:
+    if point_xy is None:
+        return None
+    x, y = point_xy
+    return (float(image_width) - x, y)
 
 
 def _find_attribute(obj: ET.Element, name: str) -> Optional[ET.Element]:

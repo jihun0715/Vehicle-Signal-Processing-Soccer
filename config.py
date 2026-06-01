@@ -1,7 +1,10 @@
-"""Project-level configuration.
+"""프로젝트 전체 설정값을 모아둔 파일.
 
-Edit this file when local paths or default debug settings change.
-Environment variables with the same purpose can still override these defaults.
+클래스는 없고, 데이터셋 경로, dataloader 기본값, YOLO weight/device,
+projection/calibration 경로, Kalman tracker 파라미터, debug video 저장 옵션을
+한 곳에서 바꾸기 위한 상수들을 정의한다.
+환경변수로 덮어쓸 수 있는 값은 로컬/도커 환경 차이를 줄이기 위해 이곳에서
+기본값을 제공한다.
 """
 
 import os
@@ -17,6 +20,7 @@ ISSIA_SOCCER_ROOT = Path(os.environ.get("ISSIA_SOCCER_ROOT", DEFAULT_ISSIA_SOCCE
 
 ISSIA_CAMERAS = (1, 2, 3, 4, 5, 6)
 ISSIA_BALL_BBOX_SIZE = 20
+ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS = (2, 4, 6)
 
 DEBUG_OUTPUT_DIR = PROJECT_ROOT / "debug_outputs"
 

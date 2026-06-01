@@ -1,4 +1,12 @@
-"""End-to-end pieces for detection, projection, and per-camera tracking."""
+"""YOLO detection, world projection, Kalman tracking을 연결하는 모델 파이프라인.
+
+주요 클래스:
+- `SoccerTrackingPipeline`: 카메라별 YOLO person detection 결과를 world 좌표계 observation으로 바꾸고,
+  카메라별 `WorldKalmanTracker`를 갱신해 tracking 결과 dict를 만든다.
+
+주요 함수:
+- `summarize_camera_result`: 콘솔 로그에 출력하기 좋은 카메라별 detection/tracking 요약 문자열을 만든다.
+"""
 
 from __future__ import annotations
 

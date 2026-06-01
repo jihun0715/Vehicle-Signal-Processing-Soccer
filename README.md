@@ -23,6 +23,12 @@ python -m tools.debug_dataset  # ISSIA dataloader sanity check
 python -m tools.debug_video    # temporal offset debug video 생성
 ```
 
+### ISSIA Video Flip Note
+
+ISSIA-Soccer의 실제 video stream은 reference BMP와 달리 2, 4, 6번 카메라에 한해 좌우가 반전된 상태입니다.  
+따라서 dataloader는 기본적으로 `ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS = (2, 4, 6)` 설정을 사용해 해당 카메라의 frame과 annotation bbox를 함께 horizontal flip한 뒤 반환합니다.  
+캘리브레이션 tool과 reference BMP는 원본 기준을 그대로 사용하며, 별도의 추가 보정은 하지 않습니다.
+
 이 레포는 로컬 git repository를 그대로 유지한 상태에서, `VSP_Soccer_ws`에 준비된 Docker 환경 안에서 개발/실행하는 것을 기준으로 합니다.
 
 ## Development Environment

@@ -1,12 +1,16 @@
-"""World-frame Kalman tracking for projected soccer player detections.
+"""world 좌표계에서 선수 위치를 추적하는 Kalman filter tracker 모듈.
 
-The state follows the INHA brain_data.cpp style described in PLAN.md:
+주요 클래스:
+- `KalmanTrackerConfig`: gating, process noise, measurement noise, miss/hit 기준 등 tracker 파라미터를 담는다.
+- `WorldObservation`: projection이 만든 한 개의 world-frame 측정값 `(x, y)`와 bbox metadata를 담는다.
+- `WorldTrack`: track id, state, covariance, hit/miss, reliability를 가진 mutable track 상태다.
+- `WorldKalmanTracker`: predict/update, Mahalanobis gating, Hungarian assignment, track 생성/삭제를 수행한다.
+
+상태 벡터는 PLAN.md에 정리한 INHA `brain_data.cpp` 스타일을 따른다:
 
     x = [px, py, vx, vy]
 
-where px/py are positions in the common world coordinate system, not image
-coordinates. Association uses Mahalanobis gating and a Hungarian assignment
-when SciPy is available.
+여기서 px/py는 image 좌표가 아니라 공통 world 좌표계상의 위치다.
 """
 
 from __future__ import annotations

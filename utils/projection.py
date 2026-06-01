@@ -1,4 +1,14 @@
-"""Projection helpers from image-space detections to a common world frame."""
+"""image-space detection을 공통 world 좌표계 observation으로 변환하는 projection 모듈.
+
+주요 클래스:
+- `ProjectionConfig`: camera homography, reference point, fallback projection, field size 설정을 담는다.
+- `ImageToWorldProjector`: bbox bottom-center를 foot point로 보고 camera별 homography를 적용해 `(world_x, world_y)`를 만든다.
+
+주요 함수:
+- `bbox_bottom_center`: detection bbox에서 선수 발 위치로 사용할 bottom-center image point를 계산한다.
+- `_load_homographies_from_path`: calibration tool이 저장한 homographies JSON을 읽는다.
+- `_find_homography`: OpenCV 또는 DLT fallback으로 image/world point pair에서 homography를 계산한다.
+"""
 
 from __future__ import annotations
 

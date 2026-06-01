@@ -1,8 +1,15 @@
-"""Interactive ISSIA image-to-world homography calibration tool.
+"""ISSIA reference BMP에서 image-to-world homography를 만드는 interactive calibration tool.
 
-The tool opens ISSIA Reference-Camera-{id}.bmp images, lets you click standard
-soccer-pitch landmarks, and saves image-to-world homographies for the tracking
-pipeline.
+주요 클래스:
+- `CalibrationState`: 현재 카메라, reference image, landmark 클릭 상태, display scale, 저장 경로를 보관한다.
+
+주요 기능:
+- ISSIA `Reference-Camera-{id}.bmp` 이미지를 OpenCV 창에 띄운다.
+- 실제 축구장 규격 기반 landmark를 하나씩 클릭해 image/world point pair를 만든다.
+- OpenCV homography를 계산하고 카메라별 calibration JSON, overlay JPG, 통합 homographies JSON을 저장한다.
+
+캘리브레이션 좌표계는 field center를 원점으로 두고, 긴 축 동서방향을 x축,
+짧은 축 남북방향을 y축으로 둔다.
 """
 
 from __future__ import annotations

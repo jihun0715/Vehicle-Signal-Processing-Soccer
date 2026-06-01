@@ -1,4 +1,14 @@
-"""Video visualization for image-space detections and world-frame tracks."""
+"""tracking 결과를 상하분할 debug video로 시각화하는 모듈.
+
+주요 클래스:
+- `FieldRenderConfig`: 미니맵 field 크기, 출력 해상도, covariance ellipse sigma를 담는다.
+- `TrackingVisualizationWriter`: 카메라별 mp4 writer를 관리하며 원본 영상과 field minimap을 합쳐 저장한다.
+- `_WorldToMapTransform`: world 좌표 `(x, y)`를 field minimap pixel 좌표로 바꾸는 내부 helper다.
+
+주요 함수:
+- `build_tracking_canvas`: 위에는 카메라 영상, 아래에는 field map을 둔 하나의 frame을 만든다.
+- `render_field_map`: 축구장 라인, track center, covariance ellipse를 그린다.
+"""
 
 from __future__ import annotations
 

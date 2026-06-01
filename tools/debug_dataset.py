@@ -1,6 +1,11 @@
-"""Quick checks for the ISSIA soccer dataloader.
+"""ISSIA dataloader가 제대로 동작하는지 빠르게 확인하는 CLI tool.
 
-Example:
+클래스는 없고, 주요 함수는 다음과 같다.
+- `main`: config 기반으로 annotation 파싱, frame dataset, sync dataset, dataloader sample을 순서대로 점검한다.
+- `save_preview`: 선택한 프레임에 annotation bbox를 그려 debug image를 저장한다.
+- `print_sample`: sample의 meta/target 요약을 콘솔에 출력한다.
+
+실행 예:
     python -m tools.debug_dataset
 """
 

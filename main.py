@@ -1,7 +1,9 @@
-"""Run YOLO -> projection -> Kalman tracking on ISSIA Soccer frames.
+"""ISSIA Soccer 추론 파이프라인 실행 엔트리포인트.
 
-Defaults are intentionally read from config.py so local paths, model weights,
-and tracker parameters can be changed in one place.
+클래스는 없고, `main()`이 전체 흐름을 담당한다. 주요 기능은 config 기반으로
+ISSIA synchronized dataloader를 만들고, `SoccerTrackingPipeline`을 통해
+YOLO detection -> world projection -> Kalman tracking을 수행한 뒤 JSONL 결과와
+카메라별 상하분할 tracking visualization video를 저장하는 것이다.
 """
 
 from __future__ import annotations

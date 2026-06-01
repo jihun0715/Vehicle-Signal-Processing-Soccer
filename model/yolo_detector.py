@@ -1,4 +1,12 @@
-"""Ultralytics YOLO wrapper for person-only detection."""
+"""Ultralytics YOLO를 person-only detector로 감싼 모듈.
+
+주요 클래스:
+- `PersonDetection`: image-space bbox, confidence, camera/frame metadata를 담는 detection 결과 데이터 클래스.
+- `YoloPersonDetector`: config의 model path/device/conf threshold를 사용해 YOLO를 로드하고 person class만 검출한다.
+
+이 모듈은 import 시점이 아니라 detector 생성 시점에 `ultralytics`를 import해서,
+YOLO가 없는 환경에서도 다른 유틸 모듈은 import 가능하게 한다.
+"""
 
 from __future__ import annotations
 
