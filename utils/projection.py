@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from tracking import WorldObservation
+from utils.kalman_filter import WorldObservation
 
 
 @dataclass(frozen=True)

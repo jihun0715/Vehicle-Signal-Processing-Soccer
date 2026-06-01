@@ -69,11 +69,9 @@ VSP_Soccer_ws/
     ├── config.py
     ├── main.py
     ├── data/
-    ├── detectors/
-    ├── pipeline/
-    ├── projection/
-    ├── tracking/
+    ├── model/
     ├── tools/
+    ├── utils/
     └── weights/
 ```
 
@@ -167,11 +165,9 @@ Vehicle-Signal-Processing-Soccer/
 ├── config.py              # 경로, 모델, dataloader, tracking 기본값
 ├── main.py                # YOLO -> projection -> Kalman tracking 실행
 ├── data/                  # ISSIA dataset/dataloader
-├── detectors/             # YOLO detector wrapper
-├── pipeline/              # end-to-end pipeline glue
-├── projection/            # image 좌표 -> world 좌표 projection
-├── tracking/              # world-frame Kalman filter tracker
+├── model/                 # YOLO/MMPose wrapper, end-to-end model pipeline
 ├── tools/                 # calibration/debug helper scripts
+├── utils/                 # projection, Kalman filter, visualization utilities
 ├── weights/               # YOLO/MMPose 등 로컬 가중치
 └── debug_outputs/         # 실행 결과물, calibration 결과물
 ```

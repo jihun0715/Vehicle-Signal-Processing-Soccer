@@ -11,7 +11,8 @@ from typing import Any
 
 import config
 from data import create_issia_dataloader, discover_issia_reference_images
-from pipeline import SoccerTrackingPipeline, summarize_camera_result
+from model import SoccerTrackingPipeline, summarize_camera_result
+from utils import TrackingVisualizationWriter
 
 
 def main() -> int:
@@ -26,6 +27,8 @@ def main() -> int:
     print(f"  yolo_model={config.YOLO_MODEL_PATH}")
     print(f"  frames={config.PIPELINE_START_FRAME}:{end_frame}:{config.PIPELINE_FRAME_STEP}")
     print(f"  output={config.PIPELINE_OUTPUT_PATH}")
+    if config.PIPELINE_SAVE_VISUALIZATION:
+        print(f"  visualization_dir={config.PIPELINE_VIS_OUTPUT_DIR}")
 
     reference_images = discover_issia_reference_images(
         config.ISSIA_SOCCER_ROOT,
@@ -60,14 +63,24 @@ def main() -> int:
         return_tensors=False,
     )
 
+    visualizer = (
+        TrackingVisualizationWriter.from_config()
+        if config.PIPELINE_SAVE_VISUALIZATION
+        else None
+    )
+
     try:
         processed = 0
+        should_stop = False
         config.PIPELINE_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
         with config.PIPELINE_OUTPUT_PATH.open("w", encoding="utf-8") as output_file:
             for batch in dataloader:
                 for sample in batch["samples"]:
                     result = pipeline.process_sample(sample)
                     output_file.write(json.dumps(result, ensure_ascii=False) + "\n")
+                    if visualizer is not None:
+                        visualizer.write(sample, result)
+
                     summary = ", ".join(
                         summarize_camera_result(camera_result)
                         for _camera_id, camera_result in sorted(result["cameras"].items())
@@ -78,12 +91,19 @@ def main() -> int:
                     )
                     processed += 1
                     if processed >= config.PIPELINE_NUM_FRAMES:
-                        print(f"Saved tracking results: {config.PIPELINE_OUTPUT_PATH}")
-                        return 0
+                        should_stop = True
+                        break
+                if should_stop:
+                    break
     finally:
+        if visualizer is not None:
+            visualizer.close()
         _close_dataset(getattr(dataloader, "dataset", None))
 
     print(f"Saved tracking results: {config.PIPELINE_OUTPUT_PATH}")
+    if visualizer is not None:
+        for camera_id, output_path in sorted(visualizer.output_paths.items()):
+            print(f"Saved tracking visualization cam{camera_id}: {output_path}")
     return 0
 
 
