@@ -1,7 +1,8 @@
 """world 좌표계에서 선수 위치를 추적하는 Kalman filter tracker 모듈.
 
 주요 클래스:
-- `KalmanTrackerConfig`: gating, process noise, measurement noise, miss/hit 기준 등 tracker 파라미터를 담는다.
+- `KalmanTrackerConfig`: gating, process noise, measurement noise, position covariance 하한,
+  miss/hit 기준 등 tracker 파라미터를 담는다.
 - `WorldObservation`: projection이 만든 한 개의 world-frame 측정값 `(x, y)`와 bbox metadata를 담는다.
 - `WorldTrack`: track id, state, covariance, hit/miss, reliability를 가진 mutable track 상태다.
 - `WorldKalmanTracker`: predict/update, Mahalanobis gating, Hungarian assignment, track 생성/삭제를 수행한다.
@@ -43,6 +44,7 @@ class KalmanTrackerConfig:
     init_pos_std: float = 2.0
     init_vel_std: float = 1.0
     measurement_std: float = 0.25
+    min_position_std: float = 0.0
     reliability_sigma_ref: float = 0.60
     max_misses: int = 30
     min_hits: int = 1
@@ -65,6 +67,7 @@ class KalmanTrackerConfig:
             init_pos_std=project_config.TRACK_INIT_POS_STD,
             init_vel_std=project_config.TRACK_INIT_VEL_STD,
             measurement_std=project_config.TRACK_MEASUREMENT_STD,
+            min_position_std=getattr(project_config, "TRACK_MIN_POSITION_STD", 0.0),
             reliability_sigma_ref=project_config.TRACK_RELIABILITY_SIGMA_REF,
             max_misses=project_config.TRACK_MAX_MISSES,
             min_hits=project_config.TRACK_MIN_HITS,
@@ -258,6 +261,7 @@ class WorldKalmanTracker:
                 self.config.init_vel_std ** 2,
             ]
         ).astype(np.float64)
+        covariance = _apply_position_covariance_floor(covariance, self.config.min_position_std)
         track = WorldTrack(
             track_id=self._next_track_id,
             state=state,
@@ -299,7 +303,10 @@ class WorldKalmanTracker:
 
         track.state = transition.dot(track.state) + control
         track.covariance = transition.dot(track.covariance).dot(transition.T) + process_noise
-        track.covariance = _symmetrize(track.covariance)
+        track.covariance = _apply_position_covariance_floor(
+            track.covariance,
+            self.config.min_position_std,
+        )
         track.last_timestamp_sec = float(timestamp)
         track.reliability = self._compute_reliability(track.covariance)
 
@@ -420,7 +427,10 @@ class WorldKalmanTracker:
             innovation_matrix.dot(track.covariance).dot(innovation_matrix.T)
             + kalman_gain.dot(measurement_noise).dot(kalman_gain.T)
         )
-        track.covariance = _symmetrize(track.covariance)
+        track.covariance = _apply_position_covariance_floor(
+            track.covariance,
+            self.config.min_position_std,
+        )
         track.hits += 1
         track.misses = 0
         track.last_timestamp_sec = float(timestamp)
@@ -462,3 +472,20 @@ def _kalman_gain(
 
 def _symmetrize(matrix: np.ndarray) -> np.ndarray:
     return 0.5 * (matrix + matrix.T)
+
+
+def _apply_position_covariance_floor(
+    covariance: np.ndarray,
+    min_position_std: float,
+) -> np.ndarray:
+    covariance = _symmetrize(np.asarray(covariance, dtype=np.float64))
+    min_std = float(min_position_std)
+    if min_std <= 0.0:
+        return covariance
+
+    min_var = min_std * min_std
+    pos_cov = _symmetrize(covariance[:2, :2])
+    eigvals, eigvecs = np.linalg.eigh(pos_cov)
+    clamped_eigvals = np.maximum(eigvals, min_var)
+    covariance[:2, :2] = eigvecs.dot(np.diag(clamped_eigvals)).dot(eigvecs.T)
+    return _symmetrize(covariance)

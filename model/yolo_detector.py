@@ -57,6 +57,9 @@ class YoloPersonDetector:
         iou_threshold: float = 0.70,
         person_class_id: int = 0,
         verbose: bool = False,
+        end2end: Optional[bool] = False,
+        agnostic_nms: bool = False,
+        max_det: int = 300,
     ) -> None:
         try:
             from ultralytics import YOLO
@@ -72,6 +75,9 @@ class YoloPersonDetector:
         self.iou_threshold = float(iou_threshold)
         self.person_class_id = int(person_class_id)
         self.verbose = bool(verbose)
+        self.end2end = end2end
+        self.agnostic_nms = bool(agnostic_nms)
+        self.max_det = int(max_det)
         self.model = YOLO(self.model_path)
 
     @classmethod
@@ -85,6 +91,9 @@ class YoloPersonDetector:
             iou_threshold=project_config.YOLO_IOU_THRESHOLD,
             person_class_id=project_config.YOLO_PERSON_CLASS_ID,
             verbose=project_config.YOLO_VERBOSE,
+            end2end=getattr(project_config, "YOLO_END2END", False),
+            agnostic_nms=getattr(project_config, "YOLO_AGNOSTIC_NMS", False),
+            max_det=getattr(project_config, "YOLO_MAX_DET", 300),
         )
 
     def detect(
@@ -153,7 +162,11 @@ class YoloPersonDetector:
             "iou": self.iou_threshold,
             "classes": [self.person_class_id],
             "verbose": self.verbose,
+            "agnostic_nms": self.agnostic_nms,
+            "max_det": self.max_det,
         }
+        if self.end2end is not None:
+            predict_kwargs["end2end"] = bool(self.end2end)
         if self.device not in {None, ""}:
             predict_kwargs["device"] = self.device
         return predict_kwargs

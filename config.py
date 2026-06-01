@@ -57,10 +57,16 @@ DEBUG_VIDEO_SHOW_BOXES = False
 # YOLO person detector defaults
 YOLO_MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", str(PROJECT_ROOT / "weights" / "yolo26l.pt"))
 YOLO_DEVICE = os.environ.get("YOLO_DEVICE", "0")
-YOLO_CONF_THRESHOLD = 0.25
-YOLO_IOU_THRESHOLD = 0.70
+YOLO_CONF_THRESHOLD = 0.45
+YOLO_IOU_THRESHOLD = 0.5
 YOLO_PERSON_CLASS_ID = 0
 YOLO_VERBOSE = False
+# YOLO26 defaults to end-to-end inference, where IoU-threshold NMS is not the
+# traditional overlapping-box suppression. Keep this False for tracker-friendly
+# person detections that actually use the configured YOLO_IOU_THRESHOLD.
+YOLO_END2END = False
+YOLO_AGNOSTIC_NMS = False
+YOLO_MAX_DET = 300
 YOLO_BATCH_INFERENCE = True
 YOLO_BATCH_FALLBACK_TO_SINGLE = True
 
@@ -89,19 +95,20 @@ FIELD_WIDTH_M = 68.0
 # INHA-style world-frame Kalman tracker defaults
 TRACK_GATE_CHI2 = 9.21
 TRACK_BIG_COST = 1e9
-TRACK_COST_MAHALANOBIS_WEIGHT = 1.0
-TRACK_COST_L2_WEIGHT = 0.0
+TRACK_COST_MAHALANOBIS_WEIGHT = 0.8
+TRACK_COST_L2_WEIGHT = 0.2
 TRACK_COST_L2_NORM_M = 1.0
 # Process-noise standard deviations, interpreted in the same time-scaled way
 # as INHA brain_data.cpp: Q uses q_pos^2 and q_vel^2 with dt powers.
-TRACK_Q_POS = 0.02
-TRACK_Q_VEL = 0.50
-TRACK_BRAKE_ACCEL = 0.8
+TRACK_Q_POS = 0.5
+TRACK_Q_VEL = 1.0
+TRACK_BRAKE_ACCEL = 0.2
 TRACK_MIN_SPEED_EPS = 0.03
 TRACK_MAX_PREDICT_DT_SEC = 0.20
 TRACK_INIT_POS_STD = 2.0
 TRACK_INIT_VEL_STD = 1.0
-TRACK_MEASUREMENT_STD = 0.25
+TRACK_MEASUREMENT_STD = 1.0
+TRACK_MIN_POSITION_STD = 1.0
 TRACK_RELIABILITY_SIGMA_REF = 0.60
 TRACK_MAX_MISSES = 30
 TRACK_MIN_HITS = 1
