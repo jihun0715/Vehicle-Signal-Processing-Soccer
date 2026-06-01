@@ -10,7 +10,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Tuple
+import time
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from model.yolo_detector import YoloPersonDetector
 from utils.kalman_filter import KalmanTrackerConfig, WorldKalmanTracker
@@ -51,15 +52,37 @@ class SoccerTrackingPipeline:
         for tracker in self.trackers.values():
             tracker.reset()
 
-    def process_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+    def process_sample(
+        self,
+        sample: Dict[str, Any],
+        *,
+        profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        start = time.perf_counter()
         if "cameras" in sample:
-            return self.process_sync_sample(sample)
-        return self.process_camera_sample(sample)
+            result = self.process_sync_sample(sample, profile=profile)
+        else:
+            result = self.process_camera_sample(sample, profile=profile)
+        if profile is not None:
+            profile["pipeline_total_sec"] = time.perf_counter() - start
+        return result
 
-    def process_sync_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+    def process_sync_sample(
+        self,
+        sample: Dict[str, Any],
+        *,
+        profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         camera_results = {}
+        camera_profiles = profile.setdefault("cameras", {}) if profile is not None else None
         for camera_id, camera_sample in sorted(sample["cameras"].items()):
-            camera_results[int(camera_id)] = self.process_camera_sample(camera_sample)
+            camera_profile = {} if camera_profiles is not None else None
+            camera_results[int(camera_id)] = self.process_camera_sample(
+                camera_sample,
+                profile=camera_profile,
+            )
+            if camera_profiles is not None:
+                camera_profiles[str(int(camera_id))] = camera_profile
 
         return {
             "frame_index": sample.get("frame_index"),
@@ -69,14 +92,24 @@ class SoccerTrackingPipeline:
             "cameras": camera_results,
         }
 
-    def process_camera_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+    def process_camera_sample(
+        self,
+        sample: Dict[str, Any],
+        *,
+        profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        camera_start = time.perf_counter()
         meta = sample["meta"]
         camera_id = int(meta["camera_id"])
         frame_index = int(meta["frame_index"])
         timestamp_sec = float(meta.get("timestamp_sec", 0.0))
         image_size = _image_size_from_meta(meta)
 
+        detection_start = time.perf_counter()
         detections = self.detector.detect(sample["image"], meta=meta)
+        detection_sec = time.perf_counter() - detection_start
+
+        projection_start = time.perf_counter()
         observations = self.projector.detections_to_observations(
             detections,
             camera_id=camera_id,
@@ -84,8 +117,27 @@ class SoccerTrackingPipeline:
             timestamp_sec=timestamp_sec,
             frame_index=frame_index,
         )
+        projection_sec = time.perf_counter() - projection_start
+
+        tracking_start = time.perf_counter()
         tracker = self._get_tracker(camera_id)
         tracks = tracker.update(observations, timestamp_sec=timestamp_sec)
+        kalman_sec = time.perf_counter() - tracking_start
+
+        if profile is not None:
+            profile.update(
+                {
+                    "camera_id": camera_id,
+                    "frame_index": frame_index,
+                    "detection_sec": detection_sec,
+                    "projection_sec": projection_sec,
+                    "kalman_sec": kalman_sec,
+                    "camera_total_sec": time.perf_counter() - camera_start,
+                    "num_detections": len(detections),
+                    "num_observations": len(observations),
+                    "num_tracks": len(tracks),
+                }
+            )
 
         return {
             "camera_id": camera_id,

@@ -11,6 +11,8 @@
     x = [px, py, vx, vy]
 
 여기서 px/py는 image 좌표가 아니라 공통 world 좌표계상의 위치다.
+process noise 설정값 `q_pos`, `q_vel`은 표준편차로 해석하고, Q에는 제곱한
+variance를 dt 스케일과 함께 적용한다.
 """
 
 from __future__ import annotations
@@ -319,21 +321,21 @@ class WorldKalmanTracker:
         )
 
     def _process_noise(self, dt: float) -> np.ndarray:
-        q_pos = float(self.config.q_pos)
-        q_acc = float(self.config.q_vel)
+        q_pos_var = float(self.config.q_pos) ** 2
+        q_acc_var = float(self.config.q_vel) ** 2
         dt2 = dt * dt
         dt3 = dt2 * dt
         dt4 = dt2 * dt2
 
         noise = np.zeros((4, 4), dtype=np.float64)
-        noise[0, 0] = q_acc * 0.25 * dt4 + q_pos * dt
-        noise[1, 1] = q_acc * 0.25 * dt4 + q_pos * dt
-        noise[0, 2] = q_acc * 0.5 * dt3
+        noise[0, 0] = q_acc_var * 0.25 * dt4 + q_pos_var * dt
+        noise[1, 1] = q_acc_var * 0.25 * dt4 + q_pos_var * dt
+        noise[0, 2] = q_acc_var * 0.5 * dt3
         noise[2, 0] = noise[0, 2]
-        noise[1, 3] = q_acc * 0.5 * dt3
+        noise[1, 3] = q_acc_var * 0.5 * dt3
         noise[3, 1] = noise[1, 3]
-        noise[2, 2] = q_acc * dt2
-        noise[3, 3] = q_acc * dt2
+        noise[2, 2] = q_acc_var * dt2
+        noise[3, 3] = q_acc_var * dt2
         return noise
 
     def _build_cost_matrix(

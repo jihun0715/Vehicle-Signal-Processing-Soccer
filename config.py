@@ -1,8 +1,8 @@
 """프로젝트 전체 설정값을 모아둔 파일.
 
 클래스는 없고, 데이터셋 경로, dataloader 기본값, YOLO weight/device,
-projection/calibration 경로, Kalman tracker 파라미터, debug video 저장 옵션을
-한 곳에서 바꾸기 위한 상수들을 정의한다.
+projection/calibration 경로, Kalman tracker 파라미터, debug video/profile 저장
+옵션을 한 곳에서 바꾸기 위한 상수들을 정의한다.
 환경변수로 덮어쓸 수 있는 값은 로컬/도커 환경 차이를 줄이기 위해 이곳에서
 기본값을 제공한다.
 """
@@ -25,7 +25,7 @@ ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS = (2, 4, 6)
 DEBUG_OUTPUT_DIR = PROJECT_ROOT / "debug_outputs"
 
 # Dataloader defaults
-DATALOADER_BATCH_SIZE = 4
+DATALOADER_BATCH_SIZE = 16
 DATALOADER_NUM_WORKERS = 8
 DATALOADER_PIN_MEMORY = False
 
@@ -88,6 +88,8 @@ TRACK_BIG_COST = 1e9
 TRACK_COST_MAHALANOBIS_WEIGHT = 1.0
 TRACK_COST_L2_WEIGHT = 0.0
 TRACK_COST_L2_NORM_M = 1.0
+# Process-noise standard deviations, interpreted in the same time-scaled way
+# as INHA brain_data.cpp: Q uses q_pos^2 and q_vel^2 with dt powers.
 TRACK_Q_POS = 0.02
 TRACK_Q_VEL = 0.50
 TRACK_BRAKE_ACCEL = 0.8
@@ -100,14 +102,15 @@ TRACK_RELIABILITY_SIGMA_REF = 0.60
 TRACK_MAX_MISSES = 30
 TRACK_MIN_HITS = 1
 
-# End-to-end tracking debug defaults
-PIPELINE_CAMERAS = DEBUG_CAMERAS
+# End-to-end tracking pipeline defaults
+PIPELINE_CAMERAS = ISSIA_CAMERAS
 PIPELINE_START_FRAME = 500
-PIPELINE_NUM_FRAMES = 100
+PIPELINE_NUM_FRAMES = 1000
 PIPELINE_FRAME_STEP = 1
 PIPELINE_BATCH_SIZE = 1
 PIPELINE_NUM_WORKERS = 0
 PIPELINE_OUTPUT_PATH = DEBUG_OUTPUT_DIR / "tracking_results.jsonl"
+PIPELINE_PROFILE_OUTPUT_PATH = DEBUG_OUTPUT_DIR / "pipeline_profile.json"
 PIPELINE_SAVE_VISUALIZATION = True
 PIPELINE_VIS_OUTPUT_DIR = DEBUG_OUTPUT_DIR / "tracking_visualizations"
 PIPELINE_VIS_OUTPUT_WIDTH = 960

@@ -5,3 +5,4 @@ weights/*.pt
 weights/*.pth
 weights/*.onnx
 !weights/.gitkeep
+debug_outputs/tracking_visualizations/
