@@ -175,6 +175,11 @@ def _build_frame_profile(
         "dataloader_batch_sec": float(dataloader_batch_sec),
         "dataloader_amortized_sec": float(dataloader_amortized_sec),
         "pipeline_total_sec": float(pipeline_profile.get("pipeline_total_sec", 0.0)),
+        "batch_detection_enabled": bool(pipeline_profile.get("batch_detection_enabled", False)),
+        "batch_detection_sec": float(pipeline_profile.get("batch_detection_sec", 0.0)),
+        "batch_detection_num_images": int(
+            pipeline_profile.get("batch_detection_num_images", 0)
+        ),
         "json_write_sec": float(json_write_sec),
         "visualization_sec": float(visualization_sec),
         "frame_processing_sec": float(frame_processing_sec),
@@ -217,6 +222,7 @@ def _save_pipeline_profile(frame_profiles: List[Dict[str, Any]]) -> None:
             "num_workers": config.PIPELINE_NUM_WORKERS,
             "tracking_output_path": str(config.PIPELINE_OUTPUT_PATH),
             "visualization_enabled": bool(config.PIPELINE_SAVE_VISUALIZATION),
+            "yolo_batch_inference": bool(getattr(config, "YOLO_BATCH_INFERENCE", True)),
         },
         "summary": _summarize_profiles(frame_profiles),
         "frames": frame_profiles,
@@ -232,6 +238,7 @@ def _summarize_profiles(frame_profiles: List[Dict[str, Any]]) -> Dict[str, Any]:
     keys = (
         "dataloader_amortized_sec",
         "pipeline_total_sec",
+        "batch_detection_sec",
         "json_write_sec",
         "visualization_sec",
         "frame_processing_sec",

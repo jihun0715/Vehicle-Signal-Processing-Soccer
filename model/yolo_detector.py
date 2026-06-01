@@ -2,7 +2,8 @@
 
 주요 클래스:
 - `PersonDetection`: image-space bbox, confidence, camera/frame metadata를 담는 detection 결과 데이터 클래스.
-- `YoloPersonDetector`: config의 model path/device/conf threshold를 사용해 YOLO를 로드하고 person class만 검출한다.
+- `YoloPersonDetector`: config의 model path/device/conf threshold를 사용해 YOLO를 로드하고
+  단일 이미지 또는 여러 카메라 이미지를 batch로 묶어 person class만 검출한다.
 
 이 모듈은 import 시점이 아니라 detector 생성 시점에 `ultralytics`를 import해서,
 YOLO가 없는 환경에서도 다른 유틸 모듈은 import 가능하게 한다.
@@ -11,7 +12,7 @@ YOLO가 없는 환경에서도 다른 유틸 모듈은 import 가능하게 한�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -99,7 +100,54 @@ class YoloPersonDetector:
         Ultralytics handles numpy frames directly.
         """
 
-        image_np = _to_numpy_image(image)
+        results = self.model.predict(_to_numpy_image(image), **self._predict_kwargs())
+        if not results:
+            return []
+
+        return self._detections_from_result(results[0], meta=meta)
+
+    def detect_batch(
+        self,
+        images: Sequence[Any],
+        *,
+        metas: Optional[Sequence[Optional[Dict[str, Any]]]] = None,
+        fallback_to_single: bool = True,
+    ) -> List[List[PersonDetection]]:
+        """Run person-only detection on any number of camera images.
+
+        The method accepts an empty sequence and normalizes ``metas`` length, so
+        config-driven camera count changes do not create indexing errors. If
+        Ultralytics returns a result count that does not match the input count,
+        the method falls back to one-by-one detection.
+        """
+
+        image_list = list(images)
+        if not image_list:
+            return []
+
+        meta_list = _normalize_metas(metas, len(image_list))
+        image_np_list = [_to_numpy_image(image) for image in image_list]
+
+        try:
+            results = list(self.model.predict(image_np_list, **self._predict_kwargs()))
+            if len(results) != len(image_np_list):
+                raise RuntimeError(
+                    "YOLO batch result count mismatch: "
+                    f"expected {len(image_np_list)}, got {len(results)}"
+                )
+            return [
+                self._detections_from_result(result, meta=meta)
+                for result, meta in zip(results, meta_list)
+            ]
+        except Exception:
+            if not fallback_to_single:
+                raise
+            return [
+                self.detect(image, meta=meta)
+                for image, meta in zip(image_list, meta_list)
+            ]
+
+    def _predict_kwargs(self) -> Dict[str, Any]:
         predict_kwargs = {
             "conf": self.conf_threshold,
             "iou": self.iou_threshold,
@@ -108,12 +156,14 @@ class YoloPersonDetector:
         }
         if self.device not in {None, ""}:
             predict_kwargs["device"] = self.device
+        return predict_kwargs
 
-        results = self.model.predict(image_np, **predict_kwargs)
-        if not results:
-            return []
-
-        result = results[0]
+    def _detections_from_result(
+        self,
+        result: Any,
+        *,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> List[PersonDetection]:
         boxes = getattr(result, "boxes", None)
         if boxes is None or len(boxes) == 0:
             return []
@@ -176,3 +226,18 @@ def _optional_float(value: Any) -> Optional[float]:
     if value is None:
         return None
     return float(value)
+
+
+def _normalize_metas(
+    metas: Optional[Sequence[Optional[Dict[str, Any]]]],
+    target_length: int,
+) -> List[Optional[Dict[str, Any]]]:
+    if metas is None:
+        return [None] * target_length
+
+    meta_list = list(metas)
+    if len(meta_list) < target_length:
+        meta_list.extend([None] * (target_length - len(meta_list)))
+    elif len(meta_list) > target_length:
+        meta_list = meta_list[:target_length]
+    return meta_list

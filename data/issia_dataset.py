@@ -4,6 +4,7 @@
 - `ISSIADetection`: 한 프레임의 person/ball annotation 한 개를 담는 데이터 클래스.
 - `ISSIAFrameRecord`: 카메라, 프레임 번호, timestamp, video path, image size를 담는 인덱스 record.
 - `ISSIASoccerFrameDataset`: 단일 카메라 프레임 단위 sample을 반환하며, 2/4/6번 카메라는 영상과 bbox를 좌우반전한다.
+  순차 접근 시에는 OpenCV frame seek를 생략하고 `read/grab`으로 다음 frame을 읽어 video I/O 병목을 줄인다.
 - `ISSIASoccerSyncDataset`: 여러 카메라의 같은 frame index를 하나의 synchronized sample로 묶는다.
 - `ISSIASoccerOffsetSyncDataset`: 카메라별 고정 frame offset을 적용해 time-sync가 어긋난 sample과 GT offset을 만든다.
 
@@ -58,8 +59,15 @@ VIPER_NS = {
 }
 
 try:
-    from config import ISSIA_SOCCER_ROOT, ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS
+    from config import (
+        DATALOADER_SEQUENTIAL_VIDEO_MAX_GAP,
+        DATALOADER_SEQUENTIAL_VIDEO_READ,
+        ISSIA_SOCCER_ROOT,
+        ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS,
+    )
 except ImportError:
+    DATALOADER_SEQUENTIAL_VIDEO_MAX_GAP = 256
+    DATALOADER_SEQUENTIAL_VIDEO_READ = True
     ISSIA_SOCCER_ROOT = Path(os.environ.get("ISSIA_SOCCER_ROOT", "/datasets/ISSIA-Soccer"))
     ISSIA_VIDEO_HORIZONTAL_FLIP_CAMERAS = (2, 4, 6)
 
@@ -238,6 +246,8 @@ class ISSIASoccerFrameDataset(Dataset):
         load_images: bool = True,
         return_tensors: bool = True,
         horizontal_flip_cameras: Optional[Sequence[int]] = None,
+        sequential_video_read: bool = DATALOADER_SEQUENTIAL_VIDEO_READ,
+        sequential_video_max_gap: int = DATALOADER_SEQUENTIAL_VIDEO_MAX_GAP,
         transform: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
     ) -> None:
         if frame_step < 1:
@@ -258,6 +268,8 @@ class ISSIASoccerFrameDataset(Dataset):
         self.image_mode = image_mode
         self.load_images = load_images
         self.return_tensors = return_tensors
+        self.sequential_video_read = bool(sequential_video_read)
+        self.sequential_video_max_gap = int(sequential_video_max_gap)
         self.horizontal_flip_cameras = (
             DEFAULT_HORIZONTAL_FLIP_CAMERAS
             if horizontal_flip_cameras is None
@@ -265,6 +277,7 @@ class ISSIASoccerFrameDataset(Dataset):
         )
         self.transform = transform
         self._captures: Dict[int, cv2.VideoCapture] = {}
+        self._next_frame_by_camera: Dict[int, Optional[int]] = {}
 
         self.records = self._build_records()
 
@@ -284,6 +297,8 @@ class ISSIASoccerFrameDataset(Dataset):
             "timestamp_sec": record.timestamp_sec,
             "image_size": record.image_size,
             "horizontal_flipped": horizontal_flipped,
+            "sequential_video_read": self.sequential_video_read,
+            "sequential_video_max_gap": self.sequential_video_max_gap,
         }
 
         sample = {
@@ -298,12 +313,14 @@ class ISSIASoccerFrameDataset(Dataset):
     def __getstate__(self) -> Dict[str, Any]:
         state = self.__dict__.copy()
         state["_captures"] = {}
+        state["_next_frame_by_camera"] = {}
         return state
 
     def close(self) -> None:
         for capture in self._captures.values():
             capture.release()
         self._captures.clear()
+        self._next_frame_by_camera.clear()
 
     def _build_records(self) -> List[ISSIAFrameRecord]:
         if not self.root.exists():
@@ -393,18 +410,21 @@ class ISSIASoccerFrameDataset(Dataset):
             "timestamp_sec": record.timestamp_sec,
             "image_size": record.image_size,
             "horizontal_flipped": horizontal_flipped,
+            "sequential_video_read": self.sequential_video_read,
+            "sequential_video_max_gap": self.sequential_video_max_gap,
             "label_names": LABEL_NAMES,
         }
 
     def _read_image(self, record: ISSIAFrameRecord) -> Any:
         capture = self._get_capture(record.camera_id, record.video_path)
-        capture.set(cv2.CAP_PROP_POS_FRAMES, record.frame_index)
+        self._seek_or_advance_capture(capture, record)
         ok, frame = capture.read()
         if not ok or frame is None:
             raise RuntimeError(
                 f"Failed to read camera {record.camera_id} frame {record.frame_index} "
                 f"from {record.video_path}"
             )
+        self._next_frame_by_camera[record.camera_id] = record.frame_index + 1
         if self.image_mode == "rgb":
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if self._should_horizontal_flip(record.camera_id):
@@ -421,6 +441,35 @@ class ISSIASoccerFrameDataset(Dataset):
     def _should_horizontal_flip(self, camera_id: int) -> bool:
         return int(camera_id) in self.horizontal_flip_cameras
 
+    def _seek_or_advance_capture(
+        self,
+        capture: cv2.VideoCapture,
+        record: ISSIAFrameRecord,
+    ) -> None:
+        camera_id = int(record.camera_id)
+        target_frame = int(record.frame_index)
+        next_frame = self._next_frame_by_camera.get(camera_id)
+
+        gap = target_frame - next_frame if next_frame is not None else -1
+        if (
+            self.sequential_video_read
+            and next_frame is not None
+            and 0 <= gap <= self.sequential_video_max_gap
+        ):
+            while next_frame < target_frame:
+                ok = capture.grab()
+                if not ok:
+                    raise RuntimeError(
+                        f"Failed to skip camera {camera_id} frame {next_frame} "
+                        f"from {record.video_path}"
+                    )
+                next_frame += 1
+            self._next_frame_by_camera[camera_id] = next_frame
+            return
+
+        capture.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+        self._next_frame_by_camera[camera_id] = target_frame
+
     def _get_capture(self, camera_id: int, video_path: Path) -> cv2.VideoCapture:
         capture = self._captures.get(camera_id)
         if capture is None or not capture.isOpened():
@@ -428,6 +477,7 @@ class ISSIASoccerFrameDataset(Dataset):
             if not capture.isOpened():
                 raise RuntimeError(f"Failed to open video: {video_path}")
             self._captures[camera_id] = capture
+            self._next_frame_by_camera[camera_id] = None
         return capture
 
 
