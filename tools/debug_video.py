@@ -44,6 +44,7 @@ from config import (
     OFFSET_REFERENCE_CAMERA,
 )
 from data import BALL_LABEL, create_issia_offset_dataloader
+from utils import TrackMatcherSynchronizer
 
 
 def parse_args() -> argparse.Namespace:
@@ -77,6 +78,10 @@ def load_settings(cli_args: argparse.Namespace) -> SimpleNamespace:
         output=cli_args.output,
     )
 
+class MockTrackInstance:
+    def __init__(self, track_id: int):
+        self.track_id = track_id
+        self.state_history = [] # [[px, py, vx, vy], ...] 구조 축적용 버퍼
 
 def main() -> None:
     args = load_settings(parse_args())
@@ -144,6 +149,9 @@ def main() -> None:
         raise RuntimeError(f"Failed to open video writer: {output_path}")
     print(f"Writing video to: {output_path}")
 
+    # (선수 한 명의 대표 궤적을 전수 빌드업하여 NCC 딜레이 탐색 테스트를 진행하기 위함)
+    camera_tracks_buffer = {int(cam): MockTrackInstance(track_id=int(cam * 10)) for cam in args.cameras}
+
     try:
         written = 0
         should_stop = False
@@ -152,6 +160,36 @@ def main() -> None:
                 if written >= args.num_frames:
                     should_stop = True
                     break
+
+                # 매 프레임 스트리밍되는 샘플에서 선수들의 기하학적 2D 변위 및 속도 성분 누적 추출
+                for camera_id in args.cameras:
+                    cam_sample = sample["cameras"][camera_id]
+                    boxes = cam_sample["target"]["boxes"]
+                    
+                    # 프레임 내에 선수 객체가 존재한다면 (가장 첫 번째 대표 선수의 움직임을 궤적 신호로 샘플링)
+                    if len(boxes) > 0:
+                        box = boxes[0]
+                        px = (box[0] + box[2]) / 2.0
+                        py = box[3] # Foot point
+                        
+                        # 이전 프레임 위치 기반 실시간 변위 분산 속도 역산 변환 (Pseudo Kalman Filter State)
+                        history = camera_tracks_buffer[camera_id].state_history
+                        if len(history) > 0:
+                            vx = px - history[-1][0]
+                            vy = py - history[-1][1]
+                        else:
+                            vx, vy = 0.0, 0.0
+                        
+                        # 팀 아키텍처 규격 상태 벡터 x = [px, py, vx, vy] 형태로 기록 적재
+                        history.append([px, py, vx, vy])
+                    else:
+                        # 결측치 방어 로직 (선수가 화면에서 일시 소실된 정적 구간 보정)
+                        history = camera_tracks_buffer[camera_id].state_history
+                        if len(history) > 0:
+                            history.append([history[-1][0], history[-1][1], 0.0, 0.0])
+                        else:
+                            history.append([0.0, 0.0, 0.0, 0.0])
+
                 canvas = build_canvas(sample, args.cameras, args.width, args.show_boxes)
                 writer.write(canvas)
                 written += 1
@@ -164,6 +202,46 @@ def main() -> None:
                         break
             if should_stop:
                 break
+            print(f"\n🎬 비디오 스트리밍 렌더링 완료. Signal-sync 엔진 연동 및 시간 정합 연산 개시...")
+        
+        # 1. 동기화 클래스 인스턴스화
+        synchronizer = TrackMatcherSynchronizer(max_lag_frames=60, min_overlap_len=40)
+        
+        # 2. 데이터로더 내부 딕셔너리에 숨겨진 '강제로 넣은 정답 오프셋 지표(Ground Truth)' 파악
+        # (Cam 1번 기준 대비 다른 카메라가 몇 프레임 밀렸는지 기록된 컬렉션 활용)
+        applied_gt = offset_gt["applied_frame_offsets"]
+        correction_gt = offset_gt["correction_frame_offsets"]
+        
+        # 3. 비디오 채널 리스트 추출
+        cam_ids = sorted(list(camera_tracks_buffer.keys()))
+        ref_cam = cam_ids[0]
+        tgt_cam = cam_ids[1]
+        
+        print("\n" + "="*60)
+        print("📊 [Signal-sync 파트최종 통합 정량 평가 리포트 (A+ Metric)]")
+        print("-"*60)
+        
+        # 핵심 다차원 벡터 NCC 엔진 메서드 슛팅 구동!
+        # 두 카메라 트랙 버퍼 인스턴스 리스트를 토스합니다.
+        tracks_A = [camera_tracks_buffer[ref_cam]]
+        tracks_B = [camera_tracks_buffer[tgt_cam]]
+        
+        estimated_delay, matched_info = synchronizer.match_and_estimate(tracks_A, tracks_B)
+        
+        # 대현님이 주입한 실제 비전 노드 간 상대 위상차 정답 수식 도출
+        # correction_frame_offsets은 동기화를 위해 적용해야 할 보정값이므로, 실제 지연 정답은 부호가 반대입니다.
+        true_relative_delay = correction_gt[tgt_cam] - correction_gt[ref_cam]
+        
+        # 4. 정량적 오차 분석 산출
+        absolute_error = abs(true_relative_delay - estimated_delay)
+        rmse_score = np.sqrt(absolute_error ** 2) # 단일 조합 검증이므로 절대 오차가 곧 RMSE에 대응
+        
+        print("-"*60)
+        print(f"  🎥 비전 노드 정합 분석 대조 (Cam {ref_cam} <---> Cam {tgt_cam}):")
+        print(f"    - 주입된 딜레이 참값 (Ground Truth)   : {true_relative_delay:+d} frames")
+        print(f"    - NCC 신호처리 추정치 (Estimated)     : {estimated_delay:+d} frames")
+        print(f"    - 시스템 최종 정량적 오차 (RMSE)       : {rmse_score:.4f} frames")
+        print("="*60 + "\n")
     finally:
         writer.release()
         if hasattr(dataset, "close"):
