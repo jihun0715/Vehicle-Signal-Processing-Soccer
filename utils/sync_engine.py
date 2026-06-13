@@ -62,7 +62,7 @@ class TrackMatcherSynchronizer:
                 best_score = score
                 best_lag = int(lag)
                 
-        return best_score, best_lag
+        return best_score, -best_lag
 
     def match_and_estimate(self, cam1_tracks: list, cam2_tracks: list):
         """
@@ -104,7 +104,6 @@ class TrackMatcherSynchronizer:
             print(f"  - 동일 인물 매칭 (Correspondence): Cam1_ID({matched_pair[0]}) <---> Cam2_ID({matched_pair[1]})")
             print(f"  - 파형 다차원 유사도 (Max NCC): {best_global_score:.4f}")
             print(f"  - 최종 추정 시간 위상차 (Offset): {estimated_offset} 프레임")
-            estimated_offset = -estimated_offset
         else:
             print("⚠️ [경고] 비교 가능한 공통 궤적 신호가 부족합니다.")
             estimated_offset = 0
