@@ -287,7 +287,10 @@ class ISSIASoccerFrameDataset(Dataset):
     def __getitem__(self, index: int) -> Dict[str, Any]:
         record = self.records[index]
         horizontal_flipped = self._should_horizontal_flip(record.camera_id)
-        image = self._read_image(record) if self.load_images else None
+        if self.load_images:
+            image = self._read_image(record)
+        else:
+            image = np.zeros((record.image_size[0], record.image_size[1], 3), dtype=np.uint8)
         target = self._build_target(record)
         meta = {
             "dataset_root": str(record.dataset_root),
@@ -328,7 +331,7 @@ class ISSIASoccerFrameDataset(Dataset):
 
         records: List[ISSIAFrameRecord] = []
         for camera_id in self.cameras:
-            video_path = _find_camera_file(self.root / "Sequences", camera_id, ".avi")
+            video_path = _find_camera_file(self.root / "Sequences", camera_id, ".mp4")
             video_info = _read_video_info(video_path)
             image_size = (video_info["height"], video_info["width"])
             annotations = read_issia_annotations(
@@ -617,7 +620,7 @@ class ISSIASoccerOffsetSyncDataset(Dataset):
             for camera_id in self.cameras
         }
         self._video_infos = {
-            camera_id: _read_video_info(_find_camera_file(self.root / "Sequences", camera_id, ".avi"))
+            camera_id: _read_video_info(_find_camera_file(self.root / "Sequences", camera_id, ".mp4"))
             for camera_id in self.cameras
         }
         self.frame_indices = self._build_base_frame_indices()
