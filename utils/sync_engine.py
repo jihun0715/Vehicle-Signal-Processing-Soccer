@@ -20,8 +20,9 @@ class TrackMatcherSynchronizer:
         lags = np.arange(-self.max_lag, self.max_lag + 1)
         best_score = -1.0
         best_lag = 0
+        ncc_scores = np.full(len(lags), np.nan)
         
-        for lag in lags:
+        for i, lag in enumerate(lags):
             # 시간축(Lag)으로 슬라이딩하며 두 신호가 겹치는 유효 구간 추출
             if lag < 0:
                 valid_A = traj_A[-lag:]
@@ -56,13 +57,15 @@ class TrackMatcherSynchronizer:
             else:
                 # 3. 최종 NCC 점수 산출 (-1.0 ~ 1.0)
                 score = float(np.sum(dot_products) / (norm_A * norm_B))
+
+            ncc_scores[i] = score
             
             # 피크(최고 점수) 갱신
             if score > best_score:
                 best_score = score
                 best_lag = int(lag)
                 
-        return best_score, -best_lag
+        return best_score, -best_lag, ncc_scores, lags
 
     def match_and_estimate(self, cam1_tracks: list, cam2_tracks: list):
         """
@@ -72,6 +75,10 @@ class TrackMatcherSynchronizer:
         best_global_score = -1.0
         estimated_offset = 0
         matched_pair = None
+        best_ncc_scores = None
+        best_lags = None
+        best_vel_A = None
+        best_vel_B = None
 
         print("\n🔄 [Signal-sync] 칼만 상태 벡터 NCC 및 오프셋 추정 시작...")
 
@@ -91,13 +98,17 @@ class TrackMatcherSynchronizer:
                 vel_B = np.array(t2.state_history)[:, 2:4]
 
                 # 두 트랙 쌍에 대해 벡터 NCC를 돌려 가장 파형이 일치하는 오프셋(Lag) 도출
-                score, lag = self._calculate_vector_ncc(vel_A, vel_B)
+                score, lag, ncc_scores, lags = self._calculate_vector_ncc(vel_A, vel_B)
 
                 # 가장 점수가 높은 트랙 쌍을 동일 인물로 간주하고 최종 오프셋 확정
                 if score > best_global_score:
                     best_global_score = score
                     estimated_offset = lag
                     matched_pair = (t1.track_id, t2.track_id)
+                    best_ncc_scores = ncc_scores
+                    best_lags = lags
+                    best_vel_A = vel_A
+                    best_vel_B = vel_B 
 
         if matched_pair is not None:
             print("🎯 [동기화 엔진 분석 성공]")
@@ -108,4 +119,4 @@ class TrackMatcherSynchronizer:
             print("⚠️ [경고] 비교 가능한 공통 궤적 신호가 부족합니다.")
             estimated_offset = 0
 
-        return estimated_offset, matched_pair
+        return estimated_offset, matched_pair, best_ncc_scores, best_lags, best_vel_A, best_vel_B

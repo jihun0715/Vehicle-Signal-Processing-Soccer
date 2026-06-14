@@ -46,6 +46,7 @@ from config import (
 )
 from data import BALL_LABEL, create_issia_offset_dataloader
 from utils import TrackMatcherSynchronizer
+from utils.visualizer import plot_sync_results
 
 
 def parse_args() -> argparse.Namespace:
@@ -211,6 +212,7 @@ def main() -> None:
                         break
             if should_stop:
                 break
+
     finally:
         writer.stdin.close()
         try:
@@ -225,20 +227,33 @@ def main() -> None:
     print(f"Wrote video: {output_path}")
 
     # NCC 기반 offset 추정
-    from utils import TrackMatcherSynchronizer
     synchronizer = TrackMatcherSynchronizer(
         max_lag_frames=args.max_offset,
         min_overlap_len=40,
     )
     cam1_tracks = list(camera_tracks_buffer[args.cameras[0]].values())
     cam2_tracks = list(camera_tracks_buffer[args.cameras[1]].values())
-    estimated_offset, matched_pair = synchronizer.match_and_estimate(cam1_tracks, cam2_tracks)
+    estimated_offset, matched_pair, ncc_scores, lags, vel_A, vel_B = synchronizer.match_and_estimate(cam1_tracks, cam2_tracks)
 
     gt_offset = offset_gt["applied_frame_offsets"][args.cameras[1]]
     print(f"\n📊 평가 결과:")
     print(f"  GT offset:        {gt_offset} 프레임")
     print(f"  추정 offset:      {estimated_offset} 프레임")
     print(f"  오차:             {abs(estimated_offset - gt_offset)} 프레임")
+
+    if matched_pair is not None and ncc_scores is not None:
+        print("\n📈 시각화 차트 생성 중...")
+        plot_sync_results(
+            ncc_scores=ncc_scores,
+            lags=lags,
+            best_lag=float(estimated_offset),
+            traj_A=vel_A,
+            traj_B=vel_B,
+            save_dir=str(DEBUG_OUTPUT_DIR),
+        )
+        print(f"✅ 차트 저장 완료 → {DEBUG_OUTPUT_DIR}")
+    else:
+        print("⚠️ 매칭 실패로 시각화를 건너뜁니다.")
 
 
 def build_canvas(
